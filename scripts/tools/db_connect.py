@@ -175,7 +175,7 @@ class DatabaseConnect:
         """
         Verify database connectivity by executing a test query.
 
-        Attempts to connect to the database and query the prod.tickers table.
+        Attempts to connect to the database and query the prod.tickers_dim table.
         The connection is automatically closed after the test, regardless of the outcome.
 
         Returns:
@@ -190,7 +190,7 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM prod.tickers")
+            self.cursor.execute("SELECT COUNT(*) FROM prod.tickers_dim")
             count = self.cursor.fetchone()[0]
             self.logger.info(f"Successfully queried tickers table. Count: {count}")
             return True
