@@ -13,7 +13,7 @@ def fetch_ticker_data(symbol):
     try:
         logger.info(f"Fetching data for {symbol}")
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period="max", actions=True)
+        hist = ticker.history(period="6m", actions=True)
 
         if hist.empty:
             logger.warning(f"No data found for {symbol}")
