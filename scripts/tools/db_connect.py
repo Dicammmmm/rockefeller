@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 
-def setup_logging():
+def setup_logging() -> str:
     """
     Configure logging settings based on the current environment.
 
@@ -18,7 +18,7 @@ def setup_logging():
         Common format: 'timestamp - name - level - message'
     """
 
-    env = os.getenv("DB_MODE", "dev")  # Default to dev if not set
+    env: str = os.getenv("DB_MODE", "dev")  # Default to dev if not set
 
     # Common logging format
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -96,7 +96,7 @@ class DatabaseConnect:
         self.conn = None
         self.cursor = None
 
-    def setup_credentials(self):
+    def setup_credentials(self) -> None:
         """
         Configure database credentials based on the current environment.
 
@@ -104,6 +104,7 @@ class DatabaseConnect:
             - db_user: Environment-specific username
             - db_password: Environment-specific password
             - db_name: Database name
+            - db_schema: Database schema name
             - db_host: Database host address
 
         The credentials are loaded from environment variables set up in the .env file.
@@ -122,7 +123,7 @@ class DatabaseConnect:
         self.db_name = os.getenv("DB_NAME")
         self.db_host = os.getenv("DB_HOST")
 
-    def connect(self):
+    def connect(self) -> bool:
         """
         Establish a connection to the configured database.
 
@@ -157,7 +158,7 @@ class DatabaseConnect:
             self.logger.error(f"Failed to connect to database {self.db_name}: {str(e)}")
             raise
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """
         Close any active database connections and cursors.
 
