@@ -18,7 +18,7 @@ def setup_logging():
         Common format: 'timestamp - name - level - message'
     """
 
-    env = os.getenv("DB_NAME", "dev")  # Default to dev if not set
+    env = os.getenv("DB_MODE", "dev")  # Default to dev if not set
 
     # Common logging format
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -110,9 +110,12 @@ class DatabaseConnect:
         """
 
         if self.env == "prod":
+            self.db_schema = os.getenv("DB_SCHEMA_PROD")
             self.db_user = os.getenv("DB_USERNAME_PROD")
             self.db_password = os.getenv("DB_PASSWORD_PROD")
+
         else:
+            self.db_schema = os.getenv("DB_SCHEMA_DEV")
             self.db_user = os.getenv("DB_USERNAME_DEV")
             self.db_password = os.getenv("DB_PASSWORD_DEV")
 
@@ -143,7 +146,8 @@ class DatabaseConnect:
                 dbname=self.db_name,
                 user=self.db_user,
                 password=self.db_password,
-                host=self.db_host
+                host=self.db_host,
+                options=f'-c search_path={self.db_schema}'
             )
             self.cursor = self.conn.cursor()
             self.logger.debug(f"Successfully connected to database {self.db_name}")
@@ -190,9 +194,9 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM prod.tickers_dim")
+            self.cursor.execute("SELECT COUNT(*) FROM trackers_stg")
             count = self.cursor.fetchone()[0]
-            self.logger.info(f"Successfully queried tickers table. Count: {count}")
+            self.logger.info(f"Successfully queried tickers_stg table. Count: {count}")
             return True
 
         except Exception as e:
