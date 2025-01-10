@@ -195,7 +195,7 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM trackers_stg")
+            self.cursor.execute("SELECT COUNT(*) FROM trackers_stg") # WILL RESULT IN AN ERROR IF RUN IN "DEV" MODE AS THE TABLE DOES NOT EXIST
             count = self.cursor.fetchone()[0]
             self.logger.info(f"Successfully queried tickers_stg table. Count: {count}")
             return True
