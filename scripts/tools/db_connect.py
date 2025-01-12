@@ -28,7 +28,7 @@ def setup_logging() -> str:
             level=logging.DEBUG,
             format=log_format,
         )
-    if env == "dev":
+    elif env == "dev":
         # Console only for development
         logging.basicConfig(
             level=logging.INFO,
@@ -118,7 +118,7 @@ class DatabaseConnect:
             self.db_user = os.getenv("DB_USERNAME_PROD")
             self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        if self.env == "dev":
+        elif self.env == "dev":
             self.db_schema = os.getenv("DB_SCHEMA_DEV")
             self.db_user = os.getenv("DB_USERNAME_DEV")
             self.db_password = os.getenv("DB_PASSWORD_DEV")
@@ -178,6 +178,7 @@ class DatabaseConnect:
 
         if self.cursor:
             self.cursor.close()
+
         if self.conn:
             self.conn.close()
             self.logger.debug("Database connection closed")
@@ -201,9 +202,9 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM trackers_stg") # WILL RESULT IN AN ERROR IF RUN IN "DEV" MODE AS THE TABLE DOES NOT EXIST
+            self.cursor.execute("SELECT COUNT(*) FROM dim_trackers")
             count = self.cursor.fetchone()[0]
-            self.logger.info(f"Successfully queried tickers_stg table. Count: {count}")
+            self.logger.info(f"Successfully queried dim_trackers table. Count: {count}")
             return True
 
         except Exception as e:
