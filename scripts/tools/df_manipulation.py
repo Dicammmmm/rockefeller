@@ -1,88 +1,150 @@
+"""
+DataFrame Column Normalization Module
+
+This module provides functionality to normalize DataFrame column names in both pandas
+and polars DataFrames. It automatically adds a normalize() method to DataFrame 
+objects when imported, allowing for seamless integration with existing DataFrame 
+operations.
+
+The normalization process:
+- Converts all column names to lowercase
+- Replaces special characters with underscores
+- Maintains alphanumeric characters and underscores
+- Preserves the original data while only modifying column names
+
+Example:
+    Basic usage with either DataFrame type:
+    >>> from tools.df_manipulation import ReadyDF
+    >>> import pandas as pd
+    >>> df = pd.read_csv('data.csv')
+    >>> df = ReadyDF.normalize(df)  # Using the unified normalize function
+
+    Or use it directly on the DataFrame:
+    >>> df = df.normalize()
+"""
+
 import re
 import logging
 import pandas as pd
 import polars as pl
 from typing import Union, Literal
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Set up logging configuration
 logger = logging.getLogger(__name__)
 
-# Cache regex pattern at module level for better performance
-NORMALIZE_PATTERN = re.compile(r'[^a-zA-Z0-9_]')
-
-def normalize_pd(df: pd.DataFrame) -> pd.DataFrame:
+class ReadyDF:
     """
-    Normalize and validate column names in a pandas DataFrame.
-    :args:
-        df (pd.DataFrame): The DataFrame to normalize.
-    :return:
-        pd.DataFrame: The normalized DataFrame.
-    :raises:
-        TypeError: If the input is not a pandas DataFrame.
-        ValueError: If the DataFrame is empty.
-    :example:
-        >>> import pandas as pd
-        >>> df = pd.DataFrame({'Column1': [1, 2], 'Column2': [3, 4]})
-        >>> result = normalize_pd(df)  # Store result without displaying
+    A utility class that extends DataFrame functionality with column normalization.
+
+    This class provides both static normalization methods and automatically adds
+    a normalize() method to DataFrame objects when imported. You can either use
+    the class method ReadyDF.normalize() which automatically detects the DataFrame
+    type, or use the .normalize() method directly on DataFrame objects.
+
+    Class Attributes:
+        NORMALIZE_PATTERN (re.Pattern): A compiled regular expression pattern that
+            matches any characters that aren't letters, numbers, or underscores.
     """
 
-    try:
-        # Check if input is a Pandas DataFrame
-        if not isinstance(df, pd.DataFrame):
-            raise TypeError("Input must be a pandas DataFrame")
+    # The regex pattern matches any non-alphanumeric and non-underscore characters
+    NORMALIZE_PATTERN = re.compile(r'[^a-zA-Z0-9_]')
 
-        # Check if DataFrame is empty
-        elif df.empty:
-            raise ValueError("Input DataFrame is empty")
+    @staticmethod
+    def _normalize_pd(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Internal method to normalize pandas DataFrame column names.
 
-        # Normalize column names
-        df.columns = [NORMALIZE_PATTERN.sub('_', str(col).lower()) for col in df.columns]
-        logger.info("DataFrame columns normalized successfully")
+        Args:
+            df (pd.DataFrame): The pandas DataFrame to normalize
 
-    # Raise exception if any error occurs
-    except Exception as e:
-        logger.error(f"Error normalizing DataFrame: {e}")
-        raise
+        Returns:
+            pd.DataFrame: DataFrame with normalized column names
+        """
+        try:
+            if df.empty:
+                raise ValueError("Input DataFrame is empty")
 
-    return df
+            df.columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower())
+                         for col in df.columns]
+            logger.info("Pandas DataFrame columns normalized successfully")
+            return df
 
-def normalize_pl(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Normalize and validate column names in a polars DataFrame.
-    :args:
-        df (pl.DataFrame): The DataFrame to normalize.
-    :return:
-        pl.DataFrame: The normalized DataFrame.
-    :raises:
-        TypeError: If the input is not a polars DataFrame.
-        ValueError: If the DataFrame is empty.
-    :example:
-        >>> import polars as pl
-        >>> df = pl.DataFrame({'Column1': [1, 2], 'Column2': [3, 4]})
-        >>> result = normalize_pl(df)  # Store result without displaying
-    """
+        except Exception as e:
+            logger.error(f"Error normalizing DataFrame: {e}")
+            raise
 
-    try:
-        # Check if input is a Polars DataFrame
-        if not isinstance(df, pl.DataFrame):
-            raise TypeError("Input must be a polars DataFrame")
+    @staticmethod
+    def _normalize_pl(df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Internal method to normalize polars DataFrame column names.
 
-        # Check if DataFrame is empty
-        elif df.is_empty():
-            raise ValueError("Input DataFrame is empty")
+        Args:
+            df (pl.DataFrame): The polars DataFrame to normalize
 
-        # Normalize column names
-        new_columns = [NORMALIZE_PATTERN.sub('_', str(col).lower()) for col in df.columns]
-        df = df.rename(dict(zip(df.columns, new_columns)))
-        logger.info("DataFrame columns normalized successfully")
+        Returns:
+            pl.DataFrame: DataFrame with normalized column names
+        """
+        try:
+            if df.is_empty():
+                raise ValueError("Input DataFrame is empty")
 
-    # Raise exception if any error occurs
-    except Exception as e:
-        logger.error(f"Error normalizing DataFrame: {e}")
-        raise
+            new_columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower())
+                          for col in df.columns]
+            df = df.rename(dict(zip(df.columns, new_columns)))
+            logger.info("Polars DataFrame columns normalized successfully")
+            return df
 
-    return df
+        except Exception as e:
+            logger.error(f"Error normalizing DataFrame: {e}")
+            raise
+
+    @staticmethod
+    def normalize(df: Union[pd.DataFrame, pl.DataFrame]) -> Union[pd.DataFrame, pl.DataFrame]:
+        """
+        Normalize column names in either pandas or polars DataFrames.
+
+        This unified method automatically detects the DataFrame type and applies
+        the appropriate normalization. It converts all column names to lowercase
+        and replaces special characters with underscores.
+
+        Args:
+            df (Union[pd.DataFrame, pl.DataFrame]): The DataFrame to normalize.
+                Can be either a pandas or polars DataFrame.
+
+        Returns:
+            Union[pd.DataFrame, pl.DataFrame]: The DataFrame with normalized column
+                names. Returns the same type as the input DataFrame.
+
+        Raises:
+            TypeError: If the input is neither a pandas nor a polars DataFrame
+            ValueError: If the DataFrame is empty
+            Exception: If any error occurs during normalization
+
+        Examples:
+            Using with pandas DataFrame:
+            >>> import pandas as pd
+            >>> df = pd.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
+            >>> df = ReadyDF.normalize(df)
+            >>> print(df.columns)
+            ['column_name', 'another_col']
+
+            Using with polars DataFrame:
+            >>> import polars as pl
+            >>> df = pl.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
+            >>> df = ReadyDF.normalize(df)
+            >>> print(df.columns)
+            ['column_name', 'another_col']
+        """
+        # First, determine the type of DataFrame we're working with
+        if isinstance(df, pd.DataFrame):
+            return ReadyDF._normalize_pd(df)
+        elif isinstance(df, pl.DataFrame):
+            return ReadyDF._normalize_pl(df)
+        else:
+            raise TypeError("Input must be either a pandas or polars DataFrame")
+
+
+# Add the normalize methods to DataFrame classes when the module is imported
+# This allows for direct usage of .normalize() on DataFrame objects
+pd.DataFrame.normalize = ReadyDF._normalize_pd
+pl.DataFrame.normalize = ReadyDF._normalize_pl
