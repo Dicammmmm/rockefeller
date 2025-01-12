@@ -1,4 +1,4 @@
-# Yahoo Finance Data Pipeline
+# Rockefeller
 
 ## Description
 A Python-based ETL pipeline that extracts stock data from Yahoo Finance and loads it into a PostgreSQL database. This project features Apache Airflow integration for automated data collection, along with dedicated tools for database management and data processing. The architecture emphasizes modularity, data quality, and automated workflows through DAGs.
@@ -26,6 +26,8 @@ The DataFrame processing system has been enhanced with a unified `ReadyDF` class
 - Maintains original data while only modifying column names
 
 ## Technical Architecture
+Note that this project has been coded in Python version 3.12.8 and is confirmed to be working for this specific version.
+Project has been tested on the latest version of Python (3.13.1 at the time of writing) and incurred errors with some libraries.
 
 ### Database Connection (`database_connect.py`)
 
