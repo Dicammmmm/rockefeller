@@ -206,6 +206,61 @@ class Collector:
         except Exception as e:
             self.logger.error(f"Error collecting data for {symbol}: {e}")
             return None
+    def process_symbol_block(self, symbol_block: List[str]) -> None:
+        """
+        Processes multiple symbols simultaneously using a thread pool.
+        
+        This method creates a team of workers (threads) that can each handle data collection
+        and database writing independently. Think of it like having multiple researchers
+        gathering data at the same time, where each one:
+        1. Collects financial data for their assigned symbol
+        2. Writes the collected data to the database
+        3. Reports their progress back to the main process
+        """
+        def process_single_symbol(symbol: str) -> bool:
+            """
+            Handles the complete processing of a single symbol.
+            
+            This is like giving one researcher a specific company to research:
+            1. They gather all available data about the company
+            2. They prepare and format the data properly
+            3. They safely store the data in our database
+            """
+            try:
+                # Collect the financial data for this symbol
+                financial_data = self.collect_financial_data(symbol)
+                if not financial_data:
+                    print(f"No data available for {symbol}")
+                    return False
+    
+                # Write the data to the database using our thread-safe lock
+                with self.lock:
+                    self.write_to_database(financial_data)
+                
+                print(f"Successfully processed {symbol}")
+                return True
+                
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+                return False
+    
+        # Create a thread pool and submit all symbols for processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+            # Submit all symbols to the thread pool at once
+            future_to_symbol = {
+                executor.submit(process_single_symbol, symbol): symbol 
+                for symbol in symbol_block
+            }
+            
+            # Process results as they complete (in any order)
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                symbol = future_to_symbol[future]
+                try:
+                    success = future.result()
+                    if not success:
+                        print(f"Failed to process {symbol}")
+                except Exception as e:
+                    print(f"Unexpected error processing {symbol}: {e}")
 
     def write_to_database(self, records: List[Dict]) -> None:
         """
@@ -337,3 +392,4 @@ class Collector:
 
         finally:
             self.db.disconnect()
+    
