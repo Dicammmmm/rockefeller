@@ -206,61 +206,73 @@ class Collector:
         except Exception as e:
             self.logger.error(f"Error collecting data for {symbol}: {e}")
             return None
+
     def process_symbol_block(self, symbol_block: List[str]) -> None:
         """
-        Processes multiple symbols simultaneously using a thread pool.
-        
-        This method creates a team of workers (threads) that can each handle data collection
-        and database writing independently. Think of it like having multiple researchers
-        gathering data at the same time, where each one:
-        1. Collects financial data for their assigned symbol
-        2. Writes the collected data to the database
-        3. Reports their progress back to the main process
+        Processes multiple symbols simultaneously with detailed progress tracking.
         """
+
         def process_single_symbol(symbol: str) -> bool:
-            """
-            Handles the complete processing of a single symbol.
-            
-            This is like giving one researcher a specific company to research:
-            1. They gather all available data about the company
-            2. They prepare and format the data properly
-            3. They safely store the data in our database
-            """
             try:
-                # Collect the financial data for this symbol
+                print(f"Starting to collect data for {symbol}...")
+
+                # Collect the financial data
                 financial_data = self.collect_financial_data(symbol)
                 if not financial_data:
-                    print(f"No data available for {symbol}")
+                    print(f"❌ No data available for {symbol}")
                     return False
-    
-                # Write the data to the database using our thread-safe lock
+
+                # Show how many days of data we collected
+                print(f"📊 Collected {len(financial_data)} days of data for {symbol}")
+
+                # Write to database
                 with self.lock:
                     self.write_to_database(financial_data)
-                
-                print(f"Successfully processed {symbol}")
+
+                print(f"✅ Successfully processed and stored data for {symbol}")
                 return True
-                
+
             except Exception as e:
-                print(f"Error processing {symbol}: {e}")
+                print(f"❌ Error processing {symbol}: {e}")
                 return False
-    
-        # Create a thread pool and submit all symbols for processing
+
+        total_symbols = len(symbol_block)
+        completed_symbols = 0
+        successful_symbols = 0
+
+        print(f"\nProcessing block of {total_symbols} symbols using {self.max_threads} threads")
+        print("=" * 50)
+
+        # Create thread pool and process symbols
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            # Submit all symbols to the thread pool at once
             future_to_symbol = {
-                executor.submit(process_single_symbol, symbol): symbol 
+                executor.submit(process_single_symbol, symbol): symbol
                 for symbol in symbol_block
             }
-            
-            # Process results as they complete (in any order)
+
             for future in concurrent.futures.as_completed(future_to_symbol):
                 symbol = future_to_symbol[future]
                 try:
                     success = future.result()
-                    if not success:
-                        print(f"Failed to process {symbol}")
+                    completed_symbols += 1
+                    if success:
+                        successful_symbols += 1
+
+                    # Show progress after each symbol
+                    progress = (completed_symbols / total_symbols) * 100
+                    print(f"\nProgress: {progress:.1f}% ({completed_symbols}/{total_symbols})")
+                    print(f"Successful: {successful_symbols}, Failed: {completed_symbols - successful_symbols}")
+                    print("=" * 50)
+
                 except Exception as e:
-                    print(f"Unexpected error processing {symbol}: {e}")
+                    print(f"❌ Unexpected error processing {symbol}: {e}")
+
+        # Show block summary
+        print(f"\nBlock Summary:")
+        print(f"Total processed: {completed_symbols}")
+        print(f"Successful: {successful_symbols}")
+        print(f"Failed: {completed_symbols - successful_symbols}")
+        print("=" * 50)
 
     def write_to_database(self, records: List[Dict]) -> None:
         """
