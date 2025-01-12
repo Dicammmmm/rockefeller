@@ -18,7 +18,7 @@ def setup_logging() -> str:
         Common format: 'timestamp - name - level - message'
     """
 
-    env: str = os.getenv("DB_MODE", "dev")  # Default to dev if not set
+    env: str = os.getenv("DB_MODE", None)  # Default to dev if not set
 
     # Common logging format
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -28,12 +28,15 @@ def setup_logging() -> str:
             level=logging.DEBUG,
             format=log_format,
         )
-    else:
+    if env == "dev":
         # Console only for development
         logging.basicConfig(
             level=logging.INFO,
             format=log_format
         )
+
+    else:
+        raise ValueError("Invalid environment setting. Use 'prod' or 'dev'.")
 
     return env
 
@@ -115,10 +118,13 @@ class DatabaseConnect:
             self.db_user = os.getenv("DB_USERNAME_PROD")
             self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        else:
+        if self.env == "dev":
             self.db_schema = os.getenv("DB_SCHEMA_DEV")
             self.db_user = os.getenv("DB_USERNAME_DEV")
             self.db_password = os.getenv("DB_PASSWORD_DEV")
+
+        else:
+            raise ValueError("Invalid environment setting. Use 'prod' or 'dev'.")
 
         self.db_name = os.getenv("DB_NAME")
         self.db_host = os.getenv("DB_HOST")
