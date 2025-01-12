@@ -13,14 +13,18 @@ The normalization process:
 - Preserves the original data while only modifying column names
 
 Example:
-    Basic usage with either DataFrame type:
-    >>> from tools.df_manipulation import ReadyDF
     >>> import pandas as pd
-    >>> df = pd.read_csv('data.csv')
-    >>> df = ReadyDF.normalize(df)  # Using the unified normalize function
+    >>> # Create sample data inline
+    >>> df = pd.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
+    >>> df = ReadyDF.normalize(df)
+    >>> list(df.columns)
+    ['column_name', 'another_col']
 
-    Or use it directly on the DataFrame:
-    >>> df = df.normalize()
+    >>> import polars as pl
+    >>> df = pl.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
+    >>> df = ReadyDF.normalize(df)
+    >>> df.columns
+    ['column_name', 'another_col']
 """
 
 import re
@@ -46,8 +50,8 @@ class ReadyDF:
             matches any characters that aren't letters, numbers, or underscores.
     """
 
-    # The regex pattern matches any non-alphanumeric and non-underscore characters
-    NORMALIZE_PATTERN = re.compile(r'[^a-zA-Z0-9_]')
+    # Modified pattern to handle consecutive special characters
+    NORMALIZE_PATTERN = re.compile(r'[^a-zA-Z0-9]+')
 
     @staticmethod
     def _normalize_pd(df: pd.DataFrame) -> pd.DataFrame:
@@ -64,7 +68,7 @@ class ReadyDF:
             if df.empty:
                 raise ValueError("Input DataFrame is empty")
 
-            df.columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower())
+            df.columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower()).strip('_')
                          for col in df.columns]
             logger.info("Pandas DataFrame columns normalized successfully")
             return df
@@ -88,7 +92,7 @@ class ReadyDF:
             if df.is_empty():
                 raise ValueError("Input DataFrame is empty")
 
-            new_columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower())
+            new_columns = [ReadyDF.NORMALIZE_PATTERN.sub('_', str(col).lower()).strip('_')
                           for col in df.columns]
             df = df.rename(dict(zip(df.columns, new_columns)))
             logger.info("Polars DataFrame columns normalized successfully")
@@ -119,23 +123,7 @@ class ReadyDF:
             TypeError: If the input is neither a pandas nor a polars DataFrame
             ValueError: If the DataFrame is empty
             Exception: If any error occurs during normalization
-
-        Examples:
-            Using with pandas DataFrame:
-            >>> import pandas as pd
-            >>> df = pd.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
-            >>> df = ReadyDF.normalize(df)
-            >>> print(df.columns)
-            ['column_name', 'another_col']
-
-            Using with polars DataFrame:
-            >>> import polars as pl
-            >>> df = pl.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
-            >>> df = ReadyDF.normalize(df)
-            >>> print(df.columns)
-            ['column_name', 'another_col']
         """
-        # First, determine the type of DataFrame we're working with
         if isinstance(df, pd.DataFrame):
             return ReadyDF._normalize_pd(df)
         elif isinstance(df, pl.DataFrame):
@@ -143,8 +131,139 @@ class ReadyDF:
         else:
             raise TypeError("Input must be either a pandas or polars DataFrame")
 
+    @staticmethod
+    def finalize_trackers(df: Union[pd.DataFrame, pl.DataFrame]) -> Union[pd.DataFrame, pl.DataFrame]:
+        """
+        Finalize the DataFrame for writing to the main database.
+        Normalizes column names, reorders columns, and sets correct data types.
+
+        Args:
+            df (Union[pd.DataFrame, pl.DataFrame]): Input DataFrame to process
+
+        Returns:
+            Union[pd.DataFrame, pl.DataFrame]: Processed DataFrame with correct column
+                order and data types
+        """
+        # First normalize the DataFrame
+        df = ReadyDF.normalize(df)
+
+        # Define column order to match the fact table
+        columns_order = [
+            'symbol',
+            'date',
+
+            # Historical Price Data
+            'open',
+            'high',
+            'low',
+            'close',
+            'volume',
+            'dividends',
+            'stock_splits',
+
+            # Profitability Ratios
+            'operating_margin',
+            'gross_margin',
+            'net_profit_margin',
+            'roa',
+            'roe',
+            'ebitda',
+
+            # Liquidity Ratios
+            'current_ratio',
+            'quick_ratio',
+            'operating_cash_flow',
+            'working_capital',
+
+            # Valuation Ratios
+            'p_e',
+            'p_b',
+            'p_s',
+            'dividend_yield',
+            'eps',
+
+            # Debt Ratios
+            'debt_to_asset',
+            'debt_to_equity',
+            'interest_coverage_ratio'
+        ]
+
+        try:
+            if isinstance(df, pl.DataFrame):
+                # Define schema for Polars DataFrame
+                schema = {
+                    'symbol': pl.Utf8,
+                    'date': pl.Utf8,
+                    'open': pl.Float64,
+                    'high': pl.Float64,
+                    'low': pl.Float64,
+                    'close': pl.Float64,
+                    'volume': pl.Float64,
+                    'dividends': pl.Float64,
+                    'stock_splits': pl.Float64,
+                    'operating_margin': pl.Float64,
+                    'gross_margin': pl.Float64,
+                    'net_profit_margin': pl.Float64,
+                    'roa': pl.Float64,
+                    'roe': pl.Float64,
+                    'ebitda': pl.Float64,
+                    'current_ratio': pl.Float64,
+                    'quick_ratio': pl.Float64,
+                    'operating_cash_flow': pl.Float64,
+                    'working_capital': pl.Float64,
+                    'p_e': pl.Float64,
+                    'p_b': pl.Float64,
+                    'p_s': pl.Float64,
+                    'dividend_yield': pl.Float64,
+                    'eps': pl.Float64,
+                    'debt_to_asset': pl.Float64,
+                    'debt_to_equity': pl.Float64,
+                    'interest_coverage_ratio': pl.Float64
+                }
+
+                return df.select([pl.col(col).cast(schema[col]) for col in columns_order])
+
+            elif isinstance(df, pd.DataFrame):
+                # Define schema for pandas DataFrame
+                schema = {
+                    'symbol': 'string',
+                    'date': 'string',
+                    'open': 'float64',
+                    'high': 'float64',
+                    'low': 'float64',
+                    'close': 'float64',
+                    'volume': 'float64',
+                    'dividends': 'float64',
+                    'stock_splits': 'float64',
+                    'operating_margin': 'float64',
+                    'gross_margin': 'float64',
+                    'net_profit_margin': 'float64',
+                    'roa': 'float64',
+                    'roe': 'float64',
+                    'ebitda': 'float64',
+                    'current_ratio': 'float64',
+                    'quick_ratio': 'float64',
+                    'operating_cash_flow': 'float64',
+                    'working_capital': 'float64',
+                    'p_e': 'float64',
+                    'p_b': 'float64',
+                    'p_s': 'float64',
+                    'dividend_yield': 'float64',
+                    'eps': 'float64',
+                    'debt_to_asset': 'float64',
+                    'debt_to_equity': 'float64',
+                    'interest_coverage_ratio': 'float64'
+                }
+
+                return df[columns_order].astype(schema)
+
+            else:
+                raise TypeError("Unsupported DataFrame type")
+
+        except Exception as e:
+            logger.error(f"Error in finalizing trackers: {e}")
+            raise
 
 # Add the normalize methods to DataFrame classes when the module is imported
-# This allows for direct usage of .normalize() on DataFrame objects
 pd.DataFrame.normalize = ReadyDF._normalize_pd
 pl.DataFrame.normalize = ReadyDF._normalize_pl
