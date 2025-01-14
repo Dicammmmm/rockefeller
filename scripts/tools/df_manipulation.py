@@ -149,7 +149,7 @@ class ReadyDF:
 
         # Define column order to match the fact table
         columns_order = [
-            'symbol',
+            'tracker',
             'date',
 
             # Historical Price Data
@@ -192,7 +192,7 @@ class ReadyDF:
             if isinstance(df, pl.DataFrame):
                 # Define schema for Polars DataFrame
                 schema = {
-                    'symbol': pl.Utf8,
+                    'tracker': pl.Utf8,
                     'date': pl.Utf8,
                     'open': pl.Float64,
                     'high': pl.Float64,
@@ -226,7 +226,7 @@ class ReadyDF:
             elif isinstance(df, pd.DataFrame):
                 # Define schema for pandas DataFrame
                 schema = {
-                    'symbol': 'string',
+                    'tracker': 'string',
                     'date': 'string',
                     'open': 'float64',
                     'high': 'float64',

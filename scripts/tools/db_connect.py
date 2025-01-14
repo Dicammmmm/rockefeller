@@ -204,7 +204,7 @@ class DatabaseConnect:
             self.logger.info("Testing database connection...")
             self.cursor.execute("SELECT COUNT(*) FROM dim_trackers")
             count = self.cursor.fetchone()[0]
-            self.logger.info(f"Successfully queried dim_trackers table. Count: {count}")
+            self.logger.info(f"Successfully queried dim_trackers table.")
             return True
 
         except Exception as e:
