@@ -188,42 +188,60 @@ def get_debt_ratios(trackers: list) -> pd.DataFrame:
         raise
 
 
-def worker(queue: Queue, db: DatabaseConnect, insert_stmt: str) -> None:
-    """Worker thread to process batches of data"""
-    while True:
-        batch = queue.get()
-        if batch is None:  # Poison pill
-            queue.task_done()
-            break
-
-        try:
-            db.connect()
-            db.cursor.executemany(insert_stmt, batch)
-            db.conn.commit()
-            print(f"Successfully inserted batch of {len(batch)} rows")
-        except Exception as e:
-            db.conn.rollback()
-            print(f"Error in batch: {e}")
-        finally:
-            db.disconnect()
-            queue.task_done()
+def worker(queue: Queue, results: dict, function, trackers: List) -> None:
+    """Worker to execute data collection functions"""
+    try:
+        result = function(trackers)
+        results[function.__name__] = result
+    except Exception as e:
+        print(f"Error in {function.__name__}: {e}")
+    finally:
+        queue.task_done()
 
 
 def main():
     trackers = get_trackers()
 
-    historical_data = get_historical_data(trackers)
-    profitability_ratios = get_profitability_ratios(trackers)
-    liquidity_ratios = get_liquidity_ratios(trackers)
-    valuation_ratios = get_valuation_ratios(trackers)
-    debt_ratios = get_debt_ratios(trackers)
+    # Set up threading
+    queue = Queue()
+    results = {}
+    threads = []
 
-    combined_data = pd.concat([historical_data, profitability_ratios, liquidity_ratios, valuation_ratios, debt_ratios],
-                              axis=1)
+    # List of functions to run in parallel
+    functions = [
+        get_historical_data,
+        get_profitability_ratios,
+        get_liquidity_ratios,
+        get_valuation_ratios,
+        get_debt_ratios
+    ]
+
+    # Start a thread for each function
+    for func in functions:
+        t = threading.Thread(target=worker, args=(queue, results, func, trackers))
+        t.start()
+        threads.append(t)
+
+    # Wait for all tasks to complete
+    queue.join()
+
+    # Wait for all threads to finish
+    for t in threads:
+        t.join()
+
+    # Combine results
+    combined_data = pd.concat([
+        results['get_historical_data'],
+        results['get_profitability_ratios'],
+        results['get_liquidity_ratios'],
+        results['get_valuation_ratios'],
+        results['get_debt_ratios']
+    ], axis=1)
+
     combined_data.reset_index()
     combined_data['date'] = combined_data['date'].dt.strftime('%Y-%m-%d')
 
-    # Finalize the data
+    # Finalize and write data
     finalized_df = ReadyDF.finalize_trackers(combined_data)
 
     # Generate insert statement
@@ -234,37 +252,19 @@ def main():
     # Convert DataFrame to list of tuples
     data = [tuple(row) for row in finalized_df.to_numpy()]
 
-    # Create batches of data (100 rows per batch)
-    batch_size = 100
-    batches = [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
-
-    # Set up threading
-    num_workers = 10
-    queue = Queue()
-    threads: List[threading.Thread] = []
-
-    # Start worker threads
-    for _ in range(num_workers):
-        t = threading.Thread(target=worker, args=(queue, DatabaseConnect(), insert_stmt))
-        t.start()
-        threads.append(t)
-
-    # Add batches to queue
-    for batch in batches:
-        queue.put(batch)
-
-    # Add poison pills to stop workers
-    for _ in range(num_workers):
-        queue.put(None)
-
-    # Wait for all tasks to complete
-    queue.join()
-
-    # Wait for all threads to finish
-    for t in threads:
-        t.join()
-
-    print("All data inserted successfully")
+    # Write to database
+    db = DatabaseConnect()
+    try:
+        db.connect()
+        db.cursor.executemany(insert_stmt, data)
+        db.conn.commit()
+        print(f"Successfully inserted {len(finalized_df)} rows")
+    except Exception as e:
+        db.conn.rollback()
+        print(f"Error: {e}")
+        raise
+    finally:
+        db.disconnect()
 
 if __name__ == "__main__":
     main()
