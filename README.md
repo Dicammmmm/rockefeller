@@ -232,6 +232,7 @@ project-root/
 │   └── dags/
 │       └── daily_dag.py      # Airflow DAG for daily data collection <- WIP
 ├── scripts/
+|   ├── verify.py             # Verification script for tracker listings
 │   ├── collector.py          # Data collection utilities <- WIP
 │   └── tools/
 │       ├── __init__.py
