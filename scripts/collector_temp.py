@@ -9,7 +9,6 @@ import os
 # Setup logging
 logger = logging.getLogger(__name__)
 
-
 def _get_trackers() -> list:
     """
     Fetches a list of trackers from the database.
@@ -28,7 +27,6 @@ def _get_trackers() -> list:
     finally:
         db.disconnect()
 
-
 def _process_single_tracker(args: tuple) -> tuple[str, str]:
     """
     Process a single tracker in its own process.
@@ -36,13 +34,13 @@ def _process_single_tracker(args: tuple) -> tuple[str, str]:
     :return: Tuple of (tracker, status) where status is either 'success', 'second_pass', or 'third_pass'
     """
     tracker, period = args
-
+    
     # Each process gets its own database connection
     db = DatabaseConnect()
     db.connect()
-
+    
     logger.info(f"Process {os.getpid()} processing tracker {tracker}")
-
+    
     try:
         ticker = yf.Ticker(tracker)
         try:
@@ -55,33 +53,41 @@ def _process_single_tracker(args: tuple) -> tuple[str, str]:
 
                 # Process each row in the historical data
                 for date, row in history.iterrows():
+                    def safe_float(value):
+                        """Convert value to float, returning None if NaN"""
+                        try:
+                            float_val = float(value)
+                            return None if pd.isna(float_val) or np.isnan(float_val) else float_val
+                        except (ValueError, TypeError):
+                            return None
+
                     financials = {
                         "tracker": str(tracker),
                         "date": date,
-                        "open": float(row['Open']),
-                        "high": float(row['High']),
-                        "low": float(row['Low']),
-                        "close": float(row['Close']),
-                        "volume": int(row['Volume']),
-                        "dividends": float(row['Dividends']) if 'Dividends' in row else None,
-                        "stock_splits": float(row['Stock Splits']) if 'Stock Splits' in row else None,
-                        "operating_margin": float(info.get("operatingMargins", None)),
-                        "gross_margin": float(info.get("grossMargins", None)),
-                        "net_profit_margin": float(info.get("profitMargins", None)),
-                        "roa": float(info.get("returnOnAssets", None)),
-                        "roe": float(info.get("returnOnEquity", None)),
-                        "ebitda": float(info.get("ebitda", None)),
-                        "quick_ratio": float(info.get("quickRatio", None)),
-                        "operating_cashflow": float(info.get("operatingCashflow", None)),
-                        "working_capital": float(info.get("workingCapital", None)),
-                        "p_e": float(info.get("forwardPE", None)),
-                        "p_b": float(info.get("priceToBook", None)),
-                        "p_s": float(info.get("priceToSales", None)),
-                        "dividend_yield": float(info.get("dividendYield", None)),
-                        "eps": float(info.get("trailingEps", None)),
-                        "debt_to_asset": float(info.get("debtToAssets", None)),
-                        "debt_to_equity": float(info.get("debtToEquity", None)),
-                        "interest_coverage_ratio": float(info.get("interestCoverage", None))
+                        "open": safe_float(row['Open']),
+                        "high": safe_float(row['High']),
+                        "low": safe_float(row['Low']),
+                        "close": safe_float(row['Close']),
+                        "volume": int(row['Volume']) if not pd.isna(row['Volume']) else None,
+                        "dividends": safe_float(row['Dividends'] if 'Dividends' in row else None),
+                        "stock_splits": safe_float(row['Stock Splits'] if 'Stock Splits' in row else None),
+                        "operating_margin": safe_float(info.get("operatingMargins")),
+                        "gross_margin": safe_float(info.get("grossMargins")),
+                        "net_profit_margin": safe_float(info.get("profitMargins")),
+                        "roa": safe_float(info.get("returnOnAssets")),
+                        "roe": safe_float(info.get("returnOnEquity")),
+                        "ebitda": safe_float(info.get("ebitda")),
+                        "quick_ratio": safe_float(info.get("quickRatio")),
+                        "operating_cashflow": safe_float(info.get("operatingCashflow")),
+                        "working_capital": safe_float(info.get("workingCapital")),
+                        "p_e": safe_float(info.get("forwardPE")),
+                        "p_b": safe_float(info.get("priceToBook")),
+                        "p_s": safe_float(info.get("priceToSales")),
+                        "dividend_yield": safe_float(info.get("dividendYield")),
+                        "eps": safe_float(info.get("trailingEps")),
+                        "debt_to_asset": safe_float(info.get("debtToAssets")),
+                        "debt_to_equity": safe_float(info.get("debtToEquity")),
+                        "interest_coverage_ratio": safe_float(info.get("interestCoverage"))
                     }
 
                     try:
@@ -125,7 +131,6 @@ def _process_single_tracker(args: tuple) -> tuple[str, str]:
     finally:
         db.disconnect()
 
-
 def _process_data_parallel(trackers: list, period: str = "5y", max_workers: int = None) -> tuple[list, list]:
     """
     Process trackers in parallel using multiprocessing.
@@ -136,26 +141,25 @@ def _process_data_parallel(trackers: list, period: str = "5y", max_workers: int 
     """
     if max_workers is None:
         max_workers = cpu_count()  # Use number of CPU cores
-
+        
     second_pass = []
     third_pass = []
-
+    
     # Create arguments list for multiprocessing
     args = [(tracker, period) for tracker in trackers]
-
+    
     # Process trackers in parallel
     with Pool(processes=max_workers) as pool:
         results = pool.map(_process_single_tracker, args)
-
+        
         # Process results
         for tracker, status in results:
             if status == "second_pass":
                 second_pass.append(tracker)
             elif status == "third_pass":
                 third_pass.append(tracker)
-
+                
     return second_pass, third_pass
-
 
 def main() -> None:
     """
@@ -163,7 +167,7 @@ def main() -> None:
     """
     try:
         trackers = _get_trackers()
-
+        
         # Process initial batch with parallel processing
         second_pass, third_pass = _process_data_parallel(trackers)
 
@@ -178,7 +182,6 @@ def main() -> None:
     except Exception as e:
         logger.error(f"Error in main function: {str(e)}")
         raise
-
 
 if __name__ == "__main__":
     main()
