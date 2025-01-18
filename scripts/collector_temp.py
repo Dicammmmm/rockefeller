@@ -3,238 +3,182 @@ import numpy as np
 import yfinance as yf
 import pandas as pd
 from tools.db_connect import DatabaseConnect
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple, Dict, Any, Optional
-import threading
-from contextlib import contextmanager
-import time
-from functools import wraps
+from multiprocessing import Pool, cpu_count
+import os
 
-# Setup logging and database connection
+# Setup logging
 logger = logging.getLogger(__name__)
-thread_local = threading.local()
-DB_RETRY_ATTEMPTS = 3
-DB_RETRY_DELAY = 1  # seconds
 
-@contextmanager
-def get_db_connection():
-    """
-    Context manager for thread-local database connections
-    """
-    if not hasattr(thread_local, "db"):
-        thread_local.db = DatabaseConnect()
-    
-    try:
-        thread_local.db.connect()
-        yield thread_local.db
-    finally:
-        thread_local.db.disconnect()
 
-def retry_on_db_error(func):
-    """
-    Decorator to retry database operations
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        for attempt in range(DB_RETRY_ATTEMPTS):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                if attempt == DB_RETRY_ATTEMPTS - 1:
-                    raise
-                logger.warning(f"Database operation failed, attempt {attempt + 1}/{DB_RETRY_ATTEMPTS}: {str(e)}")
-                time.sleep(DB_RETRY_DELAY)
-    return wrapper
-
-@retry_on_db_error
-def _get_trackers() -> List[str]:
+def _get_trackers() -> list:
     """
     Fetches a list of trackers from the database.
+    :return: Returns a list of trackers.
     """
-    with get_db_connection() as db:
+    db = DatabaseConnect()
+    try:
+        db.connect()
         db.cursor.execute("SELECT ARRAY_AGG(tracker) FROM dim_trackers WHERE delisted = FALSE")
-        trackers: Optional[List[str]] = db.cursor.fetchone()[0]
-        
-        if not trackers:
-            logger.warning("No trackers found in database")
-            return []
-            
+        trackers: list = db.cursor.fetchone()[0]
         logger.info(f"Successfully fetched {len(trackers)} trackers from the database")
         return trackers
+    except Exception as e:
+        logger.error(f"Error fetching trackers from the database: {str(e)}")
+        raise
+    finally:
+        db.disconnect()
 
-def _insert_financial_data(db, tracker: str, date: pd.Timestamp, history_row: pd.Series, 
-                          ticker_info: Dict[str, Any]) -> None:
-    """
-    Insert a single day's financial data into the database, skipping if record exists
-    """
-    # Check if record already exists
-    db.cursor.execute(
-        "SELECT 1 FROM fact_trackers WHERE tracker = %s AND date = %s",
-        (tracker, date)
-    )
-    if db.cursor.fetchone():
-        logger.debug(f"Record already exists for {tracker} on {date}, skipping")
-        return
 
-    financials = {
-        "tracker": str(tracker),
-        "date": date,
-        "open": float(history_row['Open']),
-        "high": float(history_row['High']),
-        "low": float(history_row['Low']),
-        "close": float(history_row['Close']),
-        "volume": int(history_row['Volume']),
-        "dividends": float(history_row['Dividends']),
-        "stock_splits": float(history_row['Stock Splits']),
-        "operating_margin": float(ticker_info.get("operatingMargins", np.nan)),
-        "gross_margin": float(ticker_info.get("grossMargins", np.nan)),
-        "net_profit_margin": float(ticker_info.get("profitMargins", np.nan)),
-        "roa": float(ticker_info.get("returnOnAssets", np.nan)),
-        "roe": float(ticker_info.get("returnOnEquity", np.nan)),
-        "ebitda": float(ticker_info.get("ebitda", np.nan)),
-        "quick_ratio": float(ticker_info.get("quickRatio", np.nan)),
-        "operating_cashflow": float(ticker_info.get("operatingCashflow", np.nan)),
-        "working_capital": float(ticker_info.get("workingCapital", np.nan)),
-        "p_e": float(ticker_info.get("forwardPE", np.nan)),
-        "p_b": float(ticker_info.get("priceToBook", np.nan)),
-        "p_s": float(ticker_info.get("priceToSales", np.nan)),
-        "dividend_yield": float(ticker_info.get("dividendYield", np.nan)),
-        "eps": float(ticker_info.get("trailingEps", np.nan)),
-        "debt_to_asset": float(ticker_info.get("debtToAssets", np.nan)),
-        "debt_to_equity": float(ticker_info.get("debtToEquity", np.nan)),
-        "interest_coverage_ratio": float(ticker_info.get("interestCoverage", np.nan))
-    }
-
-    db.cursor.execute("""
-        INSERT INTO fact_trackers (
-            tracker, date, open, high, low, close, volume, dividends, stock_splits,
-            operating_margin, gross_margin, net_profit_margin, roa, roe, ebitda, quick_ratio,
-            operating_cashflow, working_capital, p_e, p_b, p_s, dividend_yield, eps,
-            debt_to_asset, debt_to_equity, interest_coverage_ratio
-        ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s
-        )
-    """, tuple(financials.values()))
-
-def _process_single_tracker(tracker: str, period: str = "5y") -> Tuple[str, List[str]]:
+def _process_single_tracker(args: tuple) -> tuple[str, str]:
     """
-    Process a single tracker and return its category for potential reprocessing
+    Process a single tracker in its own process.
+    :param args: Tuple containing (tracker, period)
+    :return: Tuple of (tracker, status) where status is either 'success', 'second_pass', or 'third_pass'
     """
+    tracker, period = args
+
+    # Each process gets its own database connection
+    db = DatabaseConnect()
+    db.connect()
+
+    logger.info(f"Process {os.getpid()} processing tracker {tracker}")
+
     try:
-        with get_db_connection() as db:
-            ticker = yf.Ticker(tracker)
+        ticker = yf.Ticker(tracker)
+        try:
+            # Get historical price data
             history = ticker.history(period=period)
 
-            if len(history) == 0:
-                logger.warning(f"No historical data found for tracker {tracker}")
-                return tracker, []
+            if len(history) > 0:
+                # Get additional financial metrics
+                info = ticker.info
 
-            # Get the most recent info for financial ratios
-            ticker_info = ticker.info
-            
-            # Process each day's data
-            rows_processed = 0
-            for date, row in history.iterrows():
-                try:
-                    # Skip days with missing essential data
-                    if any(pd.isna(row[col]) for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+                # Process each row in the historical data
+                for date, row in history.iterrows():
+                    financials = {
+                        "tracker": str(tracker),
+                        "date": date,
+                        "open": float(row['Open']),
+                        "high": float(row['High']),
+                        "low": float(row['Low']),
+                        "close": float(row['Close']),
+                        "volume": int(row['Volume']),
+                        "dividends": float(row['Dividends']) if 'Dividends' in row else np.nan,
+                        "stock_splits": float(row['Stock Splits']) if 'Stock Splits' in row else np.nan,
+                        "operating_margin": float(info.get("operatingMargins", np.nan)),
+                        "gross_margin": float(info.get("grossMargins", np.nan)),
+                        "net_profit_margin": float(info.get("profitMargins", np.nan)),
+                        "roa": float(info.get("returnOnAssets", np.nan)),
+                        "roe": float(info.get("returnOnEquity", np.nan)),
+                        "ebitda": float(info.get("ebitda", np.nan)),
+                        "quick_ratio": float(info.get("quickRatio", np.nan)),
+                        "operating_cashflow": float(info.get("operatingCashflow", np.nan)),
+                        "working_capital": float(info.get("workingCapital", np.nan)),
+                        "p_e": float(info.get("forwardPE", np.nan)),
+                        "p_b": float(info.get("priceToBook", np.nan)),
+                        "p_s": float(info.get("priceToSales", np.nan)),
+                        "dividend_yield": float(info.get("dividendYield", np.nan)),
+                        "eps": float(info.get("trailingEps", np.nan)),
+                        "debt_to_asset": float(info.get("debtToAssets", np.nan)),
+                        "debt_to_equity": float(info.get("debtToEquity", np.nan)),
+                        "interest_coverage_ratio": float(info.get("interestCoverage", np.nan))
+                    }
+
+                    try:
+                        db.cursor.execute("""
+                            INSERT INTO fact_trackers (
+                                tracker, date, open, high, low, close, volume, dividends, stock_splits,
+                                operating_margin, gross_margin, net_profit_margin, roa, roe, ebitda, quick_ratio,
+                                operating_cashflow, working_capital, p_e, p_b, p_s, dividend_yield, eps, 
+                                debt_to_asset, debt_to_equity, interest_coverage_ratio
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                        """, tuple(financials.values()))
+
+                    except Exception as e:
+                        logger.error(f"Error inserting data for {tracker} on {date}: {str(e)}")
+                        db.conn.rollback()
                         continue
 
-                    _insert_financial_data(db, tracker, date, row, ticker_info)
-                    rows_processed += 1
+                # Commit after all rows for a ticker are processed
+                db.conn.commit()
+                logger.info(f"Successfully inserted time series data for {tracker}")
+                return tracker, "success"
 
-                    # Commit every 100 rows to avoid large transactions
-                    if rows_processed % 100 == 0:
-                        db.conn.commit()
-                        logger.debug(f"Committed {rows_processed} rows for {tracker}")
-
-                except Exception as e:
-                    logger.error(f"Error processing row for {tracker} on {date}: {str(e)}")
-                    db.conn.rollback()
-                    continue
-
-            # Final commit for any remaining rows
-            db.conn.commit()
-            logger.info(f"Successfully processed {rows_processed} days of data for {tracker}")
-            return tracker, []
+        except Exception as e:
+            error_msg = str(e)
+            if f"Period '{period}' is invalid, must be one of ['1d', '5d', '1mo', '3mo', '6mo', '1y', 'ytd', 'max']" in error_msg:
+                logger.info(f"Added {tracker} to second pass due to period error")
+                return tracker, "second_pass"
+            elif f"Period '{period}' is invalid, must be one of ['1d', '5d']" in error_msg:
+                logger.info(f"Added {tracker} to third pass due to limited period options")
+                return tracker, "third_pass"
+            else:
+                logger.error(f"Unexpected error for {tracker}: {error_msg}")
+                return tracker, "error"
 
     except Exception as e:
-        error_msg = str(e)
-        if "Period" in error_msg:
-            if any(p in error_msg for p in ['5y', '2y', '1y']):
-                logger.info(f"Added {tracker} to second pass due to period error")
-                return tracker, ["second_pass"]
-            elif '5d' in error_msg:
-                logger.info(f"Added {tracker} to third pass due to limited period options")
-                return tracker, ["third_pass"]
-        
-        logger.error(f"Unexpected error for {tracker}: {error_msg}")
-        return tracker, []
+        logger.error(f"Error processing tracker {tracker}: {str(e)}")
+        return tracker, "error"
+    finally:
+        db.disconnect()
 
-def _process_data_parallel(trackers: List[str], period: str = "5y", max_workers: int = 10) -> Tuple[List[str], List[str]]:
+
+def _process_data_parallel(trackers: list, period: str = "5y", max_workers: int = None) -> tuple[list, list]:
     """
-    Processes trackers in parallel using threading
+    Process trackers in parallel using multiprocessing.
+    :param trackers: List of trackers to process
+    :param period: Time period for historical data
+    :param max_workers: Maximum number of processes (defaults to CPU count)
+    :return: Tuple containing lists of trackers for second and third pass
     """
+    if max_workers is None:
+        max_workers = cpu_count()  # Use number of CPU cores
+
     second_pass = []
     third_pass = []
-    processed_count = 0
-    total_trackers = len(trackers)
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_tracker = {
-            executor.submit(_process_single_tracker, tracker, period): tracker
-            for tracker in trackers
-        }
+    # Create arguments list for multiprocessing
+    args = [(tracker, period) for tracker in trackers]
 
-        for future in as_completed(future_to_tracker):
-            tracker = future_to_tracker[future]
-            try:
-                _, passes = future.result()
-                if "second_pass" in passes:
-                    second_pass.append(tracker)
-                elif "third_pass" in passes:
-                    third_pass.append(tracker)
-                
-                processed_count += 1
-                if processed_count % 10 == 0:
-                    logger.info(f"Progress: {processed_count}/{total_trackers} trackers processed")
-                    
-            except Exception as e:
-                logger.error(f"Tracker {tracker} generated an exception: {str(e)}")
+    # Process trackers in parallel
+    with Pool(processes=max_workers) as pool:
+        results = pool.map(_process_single_tracker, args)
+
+        # Process results
+        for tracker, status in results:
+            if status == "second_pass":
+                second_pass.append(tracker)
+            elif status == "third_pass":
+                third_pass.append(tracker)
 
     return second_pass, third_pass
 
+
 def main() -> None:
     """
-    Main function to fetch and process data with parallel processing
+    Main function to fetch and process data.
     """
     try:
         trackers = _get_trackers()
-        if not trackers:
-            logger.error("No trackers to process")
-            return
 
-        # First pass with 5y period
-        logger.info("Starting first pass with 5y period")
+        # Process initial batch with parallel processing
         second_pass, third_pass = _process_data_parallel(trackers)
 
-        # Second pass with 1y period
         if second_pass:
-            logger.info(f"Processing {len(second_pass)} trackers in second pass")
-            additional_third_pass, _ = _process_data_parallel(second_pass, "1y")
-            third_pass.extend(additional_third_pass)
+            logger.info(f"Found {len(second_pass)} trackers for second pass")
+            second_pass_results = _process_data_parallel(second_pass, "1y")
 
-        # Third pass with 5d period
         if third_pass:
-            logger.info(f"Processing {len(third_pass)} trackers in third pass")
-            _process_data_parallel(third_pass, "5d")
-
-        logger.info("Data processing completed successfully")
+            logger.info(f"Found {len(third_pass)} trackers for third pass")
+            third_pass_results = _process_data_parallel(third_pass, "5d")
 
     except Exception as e:
-        logger.error(f"Error in main process: {str(e)}")
+        logger.error(f"Error in main function: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()
