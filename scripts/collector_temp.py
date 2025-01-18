@@ -62,6 +62,77 @@ def _get_trackers() -> List[str]:
         logger.info(f"Successfully fetched {len(trackers)} trackers from the database")
         return trackers
 
+def _insert_financial_data(db, tracker: str, date: pd.Timestamp, history_row: pd.Series, 
+                          ticker_info: Dict[str, Any]) -> None:
+    """
+    Insert a single day's financial data into the database
+    """
+    financials = {
+        "tracker": str(tracker),
+        "date": date,
+        "open": float(history_row['Open']),
+        "high": float(history_row['High']),
+        "low": float(history_row['Low']),
+        "close": float(history_row['Close']),
+        "volume": int(history_row['Volume']),
+        "dividends": float(history_row['Dividends']),
+        "stock_splits": float(history_row['Stock Splits']),
+        "operating_margin": float(ticker_info.get("operatingMargins", np.nan)),
+        "gross_margin": float(ticker_info.get("grossMargins", np.nan)),
+        "net_profit_margin": float(ticker_info.get("profitMargins", np.nan)),
+        "roa": float(ticker_info.get("returnOnAssets", np.nan)),
+        "roe": float(ticker_info.get("returnOnEquity", np.nan)),
+        "ebitda": float(ticker_info.get("ebitda", np.nan)),
+        "quick_ratio": float(ticker_info.get("quickRatio", np.nan)),
+        "operating_cashflow": float(ticker_info.get("operatingCashflow", np.nan)),
+        "working_capital": float(ticker_info.get("workingCapital", np.nan)),
+        "p_e": float(ticker_info.get("forwardPE", np.nan)),
+        "p_b": float(ticker_info.get("priceToBook", np.nan)),
+        "p_s": float(ticker_info.get("priceToSales", np.nan)),
+        "dividend_yield": float(ticker_info.get("dividendYield", np.nan)),
+        "eps": float(ticker_info.get("trailingEps", np.nan)),
+        "debt_to_asset": float(ticker_info.get("debtToAssets", np.nan)),
+        "debt_to_equity": float(ticker_info.get("debtToEquity", np.nan)),
+        "interest_coverage_ratio": float(ticker_info.get("interestCoverage", np.nan))
+    }
+
+    db.cursor.execute("""
+        INSERT INTO fact_trackers (
+            tracker, date, open, high, low, close, volume, dividends, stock_splits,
+            operating_margin, gross_margin, net_profit_margin, roa, roe, ebitda, quick_ratio,
+            operating_cashflow, working_capital, p_e, p_b, p_s, dividend_yield, eps,
+            debt_to_asset, debt_to_equity, interest_coverage_ratio
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (tracker, date) DO UPDATE SET
+            open = EXCLUDED.open,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume,
+            dividends = EXCLUDED.dividends,
+            stock_splits = EXCLUDED.stock_splits,
+            operating_margin = EXCLUDED.operating_margin,
+            gross_margin = EXCLUDED.gross_margin,
+            net_profit_margin = EXCLUDED.net_profit_margin,
+            roa = EXCLUDED.roa,
+            roe = EXCLUDED.roe,
+            ebitda = EXCLUDED.ebitda,
+            quick_ratio = EXCLUDED.quick_ratio,
+            operating_cashflow = EXCLUDED.operating_cashflow,
+            working_capital = EXCLUDED.working_capital,
+            p_e = EXCLUDED.p_e,
+            p_b = EXCLUDED.p_b,
+            p_s = EXCLUDED.p_s,
+            dividend_yield = EXCLUDED.dividend_yield,
+            eps = EXCLUDED.eps,
+            debt_to_asset = EXCLUDED.debt_to_asset,
+            debt_to_equity = EXCLUDED.debt_to_equity,
+            interest_coverage_ratio = EXCLUDED.interest_coverage_ratio
+    """, tuple(financials.values()))
+
 def _process_single_tracker(tracker: str, period: str = "5y") -> Tuple[str, List[str]]:
     """
     Process a single tracker and return its category for potential reprocessing
@@ -75,68 +146,34 @@ def _process_single_tracker(tracker: str, period: str = "5y") -> Tuple[str, List
                 logger.warning(f"No historical data found for tracker {tracker}")
                 return tracker, []
 
-            latest_date = history.index[-1]
+            # Get the most recent info for financial ratios
+            ticker_info = ticker.info
             
-            # Validate essential data points
-            if any(pd.isna(history[col].iloc[-1]) for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
-                logger.warning(f"Missing essential price data for {tracker}")
-                return tracker, []
+            # Process each day's data
+            rows_processed = 0
+            for date, row in history.iterrows():
+                try:
+                    # Skip days with missing essential data
+                    if any(pd.isna(row[col]) for col in ['Open', 'High', 'Low', 'Close', 'Volume']):
+                        continue
 
-            financials = {
-                "tracker": str(tracker),
-                "date": latest_date,
-                "open": float(history['Open'].iloc[-1]),
-                "high": float(history['High'].iloc[-1]),
-                "low": float(history['Low'].iloc[-1]),
-                "close": float(history['Close'].iloc[-1]),
-                "volume": int(history['Volume'].iloc[-1]),
-                "dividends": float(ticker.dividends.iloc[-1]) if len(ticker.dividends) > 0 else np.nan,
-                "stock_splits": float(ticker.splits.iloc[-1]) if len(ticker.splits) > 0 else np.nan
-            }
-            
-            # Add financial ratios with validation
-            for key, info_key in [
-                ("operating_margin", "operatingMargins"),
-                ("gross_margin", "grossMargins"),
-                ("net_profit_margin", "profitMargins"),
-                ("roa", "returnOnAssets"),
-                ("roe", "returnOnEquity"),
-                ("ebitda", "ebitda"),
-                ("quick_ratio", "quickRatio"),
-                ("operating_cashflow", "operatingCashflow"),
-                ("working_capital", "workingCapital"),
-                ("p_e", "forwardPE"),
-                ("p_b", "priceToBook"),
-                ("p_s", "priceToSales"),
-                ("dividend_yield", "dividendYield"),
-                ("eps", "trailingEps"),
-                ("debt_to_asset", "debtToAssets"),
-                ("debt_to_equity", "debtToEquity"),
-                ("interest_coverage_ratio", "interestCoverage")
-            ]:
-                value = ticker.info.get(info_key, np.nan)
-                financials[key] = float(value) if value is not None else np.nan
+                    _insert_financial_data(db, tracker, date, row, ticker_info)
+                    rows_processed += 1
 
-            try:
-                db.cursor.execute("""
-                    INSERT INTO fact_trackers (
-                        tracker, date, open, high, low, close, volume, dividends, stock_splits,
-                        operating_margin, gross_margin, net_profit_margin, roa, roe, ebitda, quick_ratio,
-                        operating_cashflow, working_capital, p_e, p_b, p_s, dividend_yield, eps,
-                        debt_to_asset, debt_to_equity, interest_coverage_ratio
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                """, tuple(financials.values()))
-                db.conn.commit()
-                logger.info(f"Successfully inserted data for {tracker}")
-                return tracker, []
+                    # Commit every 100 rows to avoid large transactions
+                    if rows_processed % 100 == 0:
+                        db.conn.commit()
+                        logger.debug(f"Committed {rows_processed} rows for {tracker}")
 
-            except Exception as e:
-                logger.error(f"Error inserting data for {tracker}: {str(e)}")
-                db.conn.rollback()
-                return tracker, []
+                except Exception as e:
+                    logger.error(f"Error processing row for {tracker} on {date}: {str(e)}")
+                    db.conn.rollback()
+                    continue
+
+            # Final commit for any remaining rows
+            db.conn.commit()
+            logger.info(f"Successfully processed {rows_processed} days of data for {tracker}")
+            return tracker, []
 
     except Exception as e:
         error_msg = str(e)
