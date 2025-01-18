@@ -65,8 +65,17 @@ def _get_trackers() -> List[str]:
 def _insert_financial_data(db, tracker: str, date: pd.Timestamp, history_row: pd.Series, 
                           ticker_info: Dict[str, Any]) -> None:
     """
-    Insert a single day's financial data into the database
+    Insert a single day's financial data into the database, skipping if record exists
     """
+    # Check if record already exists
+    db.cursor.execute(
+        "SELECT 1 FROM fact_trackers WHERE tracker = %s AND date = %s",
+        (tracker, date)
+    )
+    if db.cursor.fetchone():
+        logger.debug(f"Record already exists for {tracker} on {date}, skipping")
+        return
+
     financials = {
         "tracker": str(tracker),
         "date": date,
@@ -106,31 +115,6 @@ def _insert_financial_data(db, tracker: str, date: pd.Timestamp, history_row: pd
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
-        ON CONFLICT (tracker, date) DO UPDATE SET
-            open = EXCLUDED.open,
-            high = EXCLUDED.high,
-            low = EXCLUDED.low,
-            close = EXCLUDED.close,
-            volume = EXCLUDED.volume,
-            dividends = EXCLUDED.dividends,
-            stock_splits = EXCLUDED.stock_splits,
-            operating_margin = EXCLUDED.operating_margin,
-            gross_margin = EXCLUDED.gross_margin,
-            net_profit_margin = EXCLUDED.net_profit_margin,
-            roa = EXCLUDED.roa,
-            roe = EXCLUDED.roe,
-            ebitda = EXCLUDED.ebitda,
-            quick_ratio = EXCLUDED.quick_ratio,
-            operating_cashflow = EXCLUDED.operating_cashflow,
-            working_capital = EXCLUDED.working_capital,
-            p_e = EXCLUDED.p_e,
-            p_b = EXCLUDED.p_b,
-            p_s = EXCLUDED.p_s,
-            dividend_yield = EXCLUDED.dividend_yield,
-            eps = EXCLUDED.eps,
-            debt_to_asset = EXCLUDED.debt_to_asset,
-            debt_to_equity = EXCLUDED.debt_to_equity,
-            interest_coverage_ratio = EXCLUDED.interest_coverage_ratio
     """, tuple(financials.values()))
 
 def _process_single_tracker(tracker: str, period: str = "5y") -> Tuple[str, List[str]]:
