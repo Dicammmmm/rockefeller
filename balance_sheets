@@ -33,48 +33,40 @@ def get_balance_sheet_history(ticker, years=4):
       except Exception as e:
         print(f"Error getting balance sheet for {year}: {e}")
 
-def export_to_google_sheets(balance_sheet_data, spreadsheet_name):
-    """Exports the balance sheet data to Google Sheets.
+def get_income_statement_history(ticker, years=4):
+    """Downloads the income statement data for the given ticker
+    for the specified number of years.
 
     Args:
-        balance_sheet_data (pandas.DataFrame): The balance sheet data.
-        spreadsheet_name (str): The name of the Google Sheet.
+        ticker (str): The stock ticker symbol.
+        years (int, optional): The number of years of data to retrieve.
+                              Defaults to 4.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the income statement,
+                         or None if an error occurs.
     """
     try:
-        # Google Sheets API credentials
-        scope = ['https://spreadsheets.google.com/feeds',
-                 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name('your_credentials.json', scope)
-        client = gspread.authorize(creds)
+        stock = yf.Ticker(ticker)
+        # Get the current year
+        current_year = pd.to_datetime('today').year - 1
+        # Calculate the start year
+        start_year = current_year - 3
 
-        # Create or open the spreadsheet
-        spreadsheet = client.open(spreadsheet_name)
-
-        # Create worksheets for each year
-        for year in balance_sheet_data['Year'].unique():
-            sheet_name = str(year)
+        # Download balance sheet data for each year
+        income_statement = []  # Initialize the list here
+        for year in range(start_year, current_year + 1):
             try:
-                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
-            except gspread.exceptions.WorksheetNotFound:
-                # If the worksheet already exists, get it
-                worksheet = spreadsheet.worksheet(sheet_name)
+                # Get the balance sheet for the specific year
+                income_statement = stock.income_stmt
+                # Add a 'Year' column
+                income_statement['Year'] = year
+                income_statement.append(income_statement)
+            except Exception as e:
+                print(f"Error getting balance sheet for {year}: {e}")
 
-            # Convert the DataFrame for the current year to a list of lists
-            year_data = balance_sheet_data[balance_sheet_data['Year'] == year]
-            data_to_export = [year_data.columns.tolist()] + year_data.values.tolist()
-
-            # Update the worksheet with the data
-            worksheet.update(data_to_export)
-
-        print(f"Balance sheet data exported to Google Sheet: {spreadsheet_name}")
+        return pd.concat(income_statement, ignore_index=True)  # Added return statement
 
     except Exception as e:
-        print(f"Error exporting to Google Sheets: {e}")
-
-
-# Get the balance sheet data for AAPL for the last 4 years
-balance_sheet_data = get_balance_sheet_history("AAPL", years=4)
-
-if balance_sheet_data is not None:
-    # Export the data to Google Sheets
-    export_to_google_sheets(balance_sheet_data, "AAPL Balance Sheet") 
+        print(f"Error getting income statement history for {ticker}: {e}")
+        return None
