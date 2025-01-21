@@ -51,21 +51,21 @@ def get_income_statement_history(ticker, years=4):
         # Get the current year
         current_year = pd.to_datetime('today').year - 1
         # Calculate the start year
-        start_year = current_year - 3
+        start_year = current_year - (years - 1)  # Adjusted to use the 'years' parameter
 
-        # Download balance sheet data for each year
-        income_statement = []  # Initialize the list here
+        # Download income statement data for each year
+        income_statements = []
         for year in range(start_year, current_year + 1):
             try:
-                # Get the balance sheet for the specific year
+                # Get the income statement for the specific year
                 income_statement = stock.income_stmt
                 # Add a 'Year' column
                 income_statement['Year'] = year
-                income_statement.append(income_statement)
+                income_statements.append(income_statement)  # Append to the list
             except Exception as e:
-                print(f"Error getting balance sheet for {year}: {e}")
+                print(f"Error getting income statement for {year}: {e}")
 
-        return pd.concat(income_statement, ignore_index=True)  # Added return statement
+        return pd.concat(income_statements, ignore_index=True)
 
     except Exception as e:
         print(f"Error getting income statement history for {ticker}: {e}")
