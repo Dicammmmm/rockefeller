@@ -70,3 +70,41 @@ def get_income_statement_history(ticker, years=4):
     except Exception as e:
         print(f"Error getting income statement history for {ticker}: {e}")
         return None
+
+def get_cash_flow_statement_history(ticker, years=4):
+    """Downloads the cash flow statement data for the given ticker
+    for the specified number of years.
+
+    Args:
+        ticker (str): The stock ticker symbol.
+        years (int, optional): The number of years of data to retrieve.
+                              Defaults to 4.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the cash flow statement,
+                         or None if an error occurs.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        # Get the current year
+        current_year = pd.to_datetime('today').year - 1
+        # Calculate the start year
+        start_year = current_year - (years - 1)
+
+        # Download cash flow statement data for each year
+        cash_flow_statements = []
+        for year in range(start_year, current_year + 1):
+            try:
+                # Get the cash flow statement for the specific year
+                cash_flow_statement = stock.cashflow
+                # Add a 'Year' column
+                cash_flow_statement['Year'] = year
+                cash_flow_statements.append(cash_flow_statement)
+            except Exception as e:
+                print(f"Error getting cash flow statement for {year}: {e}")
+
+        return pd.concat(cash_flow_statements, ignore_index=True)
+
+    except Exception as e:
+        print(f"Error getting cash flow statement history for {ticker}: {e}")
+        return None
