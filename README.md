@@ -43,15 +43,15 @@ DB_MODE= prod|dev|user
 DB_NAME=
 DB_HOST=
 
-# Development Credentials <- Currently unsupported
-DB_USERNAME_DEV=
-DB_PASSWORD_DEV=
-DB_SCHEMA_DEV=
-
 # Production Credentials
 DB_USERNAME_PROD=
 DB_PASSWORD_PROD=
 DB_SCHEMA_PROD=
+
+# Development Credentials <- Currently unsupported
+DB_USERNAME_DEV=
+DB_PASSWORD_DEV=
+DB_SCHEMA_DEV=
 
 # Public User Credentials <- Request access through Issues
 DB_USERNAME_PUBLIC=
