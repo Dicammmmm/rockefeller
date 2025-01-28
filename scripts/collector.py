@@ -1,12 +1,11 @@
-#!/usr/bin/env python3
-
+import os
 import logging
 import numpy as np
 import yfinance as yf
 from typing import List, Dict, Any, Tuple
 from multiprocessing import Pool, cpu_count
 from tools.db_connect import DatabaseConnect
-import os
+
 
 # Setup logging
 logging.basicConfig(
