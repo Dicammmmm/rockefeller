@@ -99,6 +99,8 @@ def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[s
 
                     # Process all historical data points
                     for date, row in history.iterrows():
+                        safe_float = lambda x: float(x) if x is not None else None
+
                         financials = {
                             "tracker": str(tracker),
                             "date": date,
@@ -107,25 +109,25 @@ def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[s
                             "low": float(row['Low']),
                             "close": float(row['Close']),
                             "volume": int(row['Volume']),
-                            "dividends": float(row['Dividends']) if 'Dividends' in row else np.nan,
-                            "stock_splits": float(row['Stock Splits']) if 'Stock Splits' in row else np.nan,
-                            "operating_margin": float(info.get("operatingMargins", np.nan)),
-                            "gross_margin": float(info.get("grossMargins", np.nan)),
-                            "net_profit_margin": float(info.get("profitMargins", np.nan)),
-                            "roa": float(info.get("returnOnAssets", np.nan)),
-                            "roe": float(info.get("returnOnEquity", np.nan)),
-                            "ebitda": float(info.get("ebitda", np.nan)),
-                            "quick_ratio": float(info.get("quickRatio", np.nan)),
-                            "operating_cashflow": float(info.get("operatingCashflow", np.nan)),
-                            "working_capital": float(info.get("workingCapital", np.nan)),
-                            "p_e": float(info.get("forwardPE", np.nan)),
-                            "p_b": float(info.get("priceToBook", np.nan)),
-                            "p_s": float(info.get("priceToSales", np.nan)),
-                            "dividend_yield": float(info.get("dividendYield", np.nan)),
-                            "eps": float(info.get("trailingEps", np.nan)),
-                            "debt_to_asset": float(info.get("debtToAssets", np.nan)),
-                            "debt_to_equity": float(info.get("debtToEquity", np.nan)),
-                            "interest_coverage_ratio": float(info.get("interestCoverage", np.nan))
+                            "dividends": float(row['Dividends']) if 'Dividends' in row else None,
+                            "stock_splits": float(row['Stock Splits']) if 'Stock Splits' in row else None,
+                            "operating_margin": safe_float(info.get("operatingMargins")),
+                            "gross_margin": safe_float(info.get("grossMargins")),
+                            "net_profit_margin": safe_float(info.get("profitMargins")),
+                            "roa": safe_float(info.get("returnOnAssets")),
+                            "roe": safe_float(info.get("returnOnEquity")),
+                            "ebitda": safe_float(info.get("ebitda")),
+                            "quick_ratio": safe_float(info.get("quickRatio")),
+                            "operating_cashflow": safe_float(info.get("operatingCashflow")),
+                            "working_capital": safe_float(info.get("workingCapital")),
+                            "p_e": safe_float(info.get("forwardPE")),
+                            "p_b": safe_float(info.get("priceToBook")),
+                            "p_s": safe_float(info.get("priceToSales")),
+                            "dividend_yield": safe_float(info.get("dividendYield")),
+                            "eps": safe_float(info.get("trailingEps")),
+                            "debt_to_asset": safe_float(info.get("debtToAssets")),
+                            "debt_to_equity": safe_float(info.get("debtToEquity")),
+                            "interest_coverage_ratio": safe_float(info.get("interestCoverage"))
                         }
 
                         if _write_data(db, financials, tracker, date):
