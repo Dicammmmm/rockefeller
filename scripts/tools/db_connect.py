@@ -113,18 +113,25 @@ class DatabaseConnect:
         The credentials are loaded from environment variables set up in the .env file.
         """
 
-        if self.env == "prod":
-            self.db_schema = os.getenv("DB_SCHEMA_PROD")
-            self.db_user = os.getenv("DB_USERNAME_PROD")
-            self.db_password = os.getenv("DB_PASSWORD_PROD")
+        match self.env:
+            case "prod":
+                self.db_schema = os.getenv("DB_SCHEMA_PROD")
+                self.db_user = os.getenv("DB_USERNAME_PROD")
+                self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        elif self.env == "dev":
-            self.db_schema = os.getenv("DB_SCHEMA_DEV")
-            self.db_user = os.getenv("DB_USERNAME_DEV")
-            self.db_password = os.getenv("DB_PASSWORD_DEV")
+            case "dev":
+                self.logger.info("Dev environment not supported at this moment, switching to prod")
+                self.db_schema = os.getenv("DB_SCHEMA_PROD")
+                self.db_user = os.getenv("DB_USERNAME_PROD")
+                self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        else:
-            raise ValueError("Invalid environment setting. Use 'prod' or 'dev'.")
+            case "user":
+                self.db_schema = os.getenv("DB_SCHEMA_PUBLIC")
+                self.db_user = os.getenv("DB_USERNAME_PUBLIC")
+                self.db_password = os.getenv("DB_PASSWORD_PUBLIC")
+
+            case _:
+                raise ValueError("Invalid environment setting. Use 'prod', 'dev' or 'user.")
 
         self.db_name = os.getenv("DB_NAME")
         self.db_host = os.getenv("DB_HOST")
@@ -169,19 +176,33 @@ class DatabaseConnect:
         Close any active database connections and cursors.
 
         Safely closes both cursor and connection objects if they exist.
-        Connection closure is logged for debugging purposes.
+        Connection closure is logged for debugging purposes. Handles any
+        exceptions that might occur during closure.
 
         Note:
             This method should be called when database operations are complete
             to free up database resources.
         """
+        try:
+            if self.cursor:
+                try:
+                    self.cursor.close()
+                except Exception as e:
+                    self.logger.error(f"Error closing cursor: {str(e)}")
+                finally:
+                    self.cursor = None
 
-        if self.cursor:
-            self.cursor.close()
+            if self.conn:
+                try:
+                    self.conn.close()
+                    self.logger.debug("Database connection closed")
+                except Exception as e:
+                    self.logger.error(f"Error closing connection: {str(e)}")
+                finally:
+                    self.conn = None
 
-        if self.conn:
-            self.conn.close()
-            self.logger.debug("Database connection closed")
+        except Exception as e:
+            self.logger.error(f"Unexpected error during disconnect: {str(e)}")
 
     def test_connection(self) -> bool:
         """
