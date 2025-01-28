@@ -78,12 +78,12 @@ def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[s
         Tuple containing (1y pass list, 5d pass list)
     """
     trackers, period = chunk_data
-    y1_pass = []
-    d5_pass = []
+    y1_pass: list = []
+    d5_pass: list = []
 
     # Create a database connection for this process
-    process_db = DatabaseConnect()
-    process_db.connect()
+    db = DatabaseConnect()
+    db.connect()
 
     logger.info(f"Process {os.getpid()} starting to process {len(trackers)} trackers")
 
@@ -128,12 +128,12 @@ def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[s
                             "interest_coverage_ratio": float(info.get("interestCoverage", np.nan))
                         }
 
-                        if _write_data(process_db, financials, tracker, date):
+                        if _write_data(db, financials, tracker, date):
                             successful_writes += 1
 
                     # Commit after all dates for this ticker are processed
                     if successful_writes > 0:
-                        process_db.conn.commit()
+                        db.conn.commit()
                         logger.info(f"Successfully inserted {successful_writes} records for {tracker}")
 
             except Exception as e:
@@ -153,7 +153,7 @@ def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[s
         raise
 
     finally:
-        process_db.disconnect()
+        db.disconnect()
         logger.info(f"Process {os.getpid()} completed processing {len(trackers)} trackers")
 
     return y1_pass, d5_pass
