@@ -39,19 +39,24 @@ pip install -r requirements.txt
 4. Create and configure your `.env` file:
 ```bash
 # Database Configuration
-DB_MODE=dev|prod
-DB_NAME=your_database_name
-DB_HOST=your_host
+DB_MODE= prod|dev|user
+DB_NAME=
+DB_HOST=
 
-# Development Credentials
-DB_USERNAME_DEV=dev_username
-DB_PASSWORD_DEV=dev_password
-DB_SCHEMA_DEV=dev_schema
+# Development Credentials <- Currently unsupported
+DB_USERNAME_DEV=
+DB_PASSWORD_DEV=
+DB_SCHEMA_DEV=
 
 # Production Credentials
-DB_USERNAME_PROD=prod_username
-DB_PASSWORD_PROD=prod_password
-DB_SCHEMA_PROD=prod_schema
+DB_USERNAME_PROD=
+DB_PASSWORD_PROD=
+DB_SCHEMA_PROD=
+
+# Public User Credentials <- Request access through Issues
+DB_USERNAME_PUBLIC=
+DB_PASSWORD_PUBLIC=
+DB_SCHEMA_PUBLIC= 
 ```
 
 ## Quick Start
@@ -151,6 +156,10 @@ Core dependencies:
 ## Disclaimer
 
 This project is for educational and research purposes only. Please ensure compliance with Yahoo Finance's terms of service when using their data.
+
+## Contributions
+
+This is a personal project and thus I will not be accepting any contributions. Thank you for understanding. :)
 
 ## License
 
