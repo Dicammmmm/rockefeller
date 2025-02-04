@@ -56,7 +56,6 @@ The ReadyDF class provides a comprehensive system for DataFrame manipulation, su
    # Converts 'Column Name!' to 'column_name'
    df = df.normalize()
    ```
-   ```
 
 ### Best Practices
 
