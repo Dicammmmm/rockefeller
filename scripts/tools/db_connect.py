@@ -3,6 +3,7 @@ import logging
 import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
+from standards import DEFAULT_TABLES
 
 
 def setup_logging() -> str:
@@ -135,6 +136,7 @@ class DatabaseConnect:
 
         self.db_name = os.getenv("DB_NAME")
         self.db_host = os.getenv("DB_HOST")
+        self.DIM_TRACKERS = DEFAULT_TABLES['DIM_TRACKERS']
 
     def connect(self) -> bool:
         """
@@ -204,7 +206,7 @@ class DatabaseConnect:
         except Exception as e:
             self.logger.error(f"Unexpected error during disconnect: {str(e)}")
 
-    def test_connection(self) -> bool:
+    def test_connection(self) -> bool | None:
         """
         Verify database connectivity by executing a test query.
 
@@ -223,7 +225,7 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM dim_trackers")
+            self.cursor.execute(f"SELECT COUNT(*) FROM {self.DIM_TRACKERS}")
             count = self.cursor.fetchone()[0]
             self.logger.info(f"Successfully queried dim_trackers table.")
             return True

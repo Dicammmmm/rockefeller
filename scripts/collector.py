@@ -5,7 +5,7 @@ import yfinance as yf
 from typing import List, Dict, Any, Tuple
 from multiprocessing import Pool, cpu_count
 from tools.db_connect import DatabaseConnect
-
+from tools.standards import DEFAULT_TABLES
 
 # Setup logging
 logging.basicConfig(
@@ -14,8 +14,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DIM_TRACKERS = DEFAULT_TABLES["DIM_TRACKERS"]
+FCT_TRACKERS = DEFAULT_TABLES["FCT_TRACKERS"]
 
-def _get_trackers() -> list:
+def _get_trackers() -> list | None:
     """
     Fetches a list of trackers from the database.
     Returns:
@@ -24,7 +26,7 @@ def _get_trackers() -> list:
     db = DatabaseConnect()
     try:
         db.connect()
-        db.cursor.execute("SELECT ARRAY_AGG(tracker) FROM dim_trackers WHERE delisted = FALSE")
+        db.cursor.execute(f"SELECT ARRAY_AGG(tracker) FROM {DIM_TRACKERS} WHERE delisted = FALSE")
         trackers: list = db.cursor.fetchone()[0]
         logger.info(f"Successfully fetched {len(trackers)} trackers from the database")
         return trackers
@@ -49,8 +51,8 @@ def _write_data(db: DatabaseConnect, financial: Dict[str, Any], tracker: str, da
         bool: True if successful, False if failed
     """
     try:
-        db.cursor.execute("""
-            INSERT INTO fact_trackers (
+        db.cursor.execute(f"""
+            INSERT INTO {FCT_TRACKERS} (
                 tracker, date, open, high, low, close, volume, dividends, stock_splits,
                 operating_margin, gross_margin, net_profit_margin, roa, roe, ebitda, 
                 quick_ratio, operating_cashflow, working_capital, p_e, p_b, p_s, 
@@ -67,7 +69,7 @@ def _write_data(db: DatabaseConnect, financial: Dict[str, Any], tracker: str, da
         return False
 
 
-def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[str]]:
+def _process_chunk(chunk_data: Tuple[List[str], str]) -> Tuple[List[str], List[str]] | None:
     """
     Process a chunk of trackers in parallel.
 
