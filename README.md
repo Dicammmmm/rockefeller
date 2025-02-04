@@ -10,7 +10,7 @@ A high-performance ETL pipeline for financial data extraction, combining the pow
 - **Robust Error Handling**: Comprehensive logging and graceful failure recovery
 - **Automated Verification**: Built-in tools to verify tracker validity
 - **Column Normalization**: Automated cleanup of DataFrame columns across libraries
-- **Standardized Table Management**: Centralized table name management through standards module
+- **Flexible DataFrame Operations**: Support for both method chaining and functional approaches
 
 ## Technical Requirements
 
@@ -89,10 +89,10 @@ Manages database connections with environment-specific configurations:
 - Secure credential management
 - Comprehensive logging
 - Schema-specific configurations
-- Integration with standardized table names
 
 ### ReadyDF
 Provides unified DataFrame processing across Pandas and Polars:
+- Multiple usage patterns (instance methods and module functions)
 - Automatic type detection
 - Column name normalization
 - Method injection for direct usage
@@ -100,20 +100,10 @@ Provides unified DataFrame processing across Pandas and Polars:
 - Performance-optimized processing
 
 ### Standards
-Centralizes database table name management:
-- Consistent table naming across the application
-- Function-based table name generation
-- Default table mapping through DEFAULT_TABLES dictionary
-- Type-safe table name access
-- Simplified table name maintenance
-
-### Collector
-Handles data collection with:
-- Parallel processing support
-- Automatic retry mechanisms
-- Granular error handling
-- Progress tracking
-- Memory-efficient processing
+Centralizes database table name management with:
+- Consistent table naming
+- Type-safe access
+- Default table mapping
 
 ## Dependencies
 
@@ -131,7 +121,7 @@ This project is for educational and research purposes only. Please ensure compli
 
 ## Contributions
 
-This is a personal project, and thus I will not be accepting any contributions. Thank you for understanding. :)
+This is a personal project and thus I will not be accepting any contributions. Thank you for understanding. :)
 
 ## License
 

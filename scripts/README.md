@@ -27,21 +27,29 @@ The collector script utilizes a multi-stage approach to data gathering:
 4. Financial data is written to the database in real-time as it's collected
 5. Failed collections are automatically queued for retry with shorter time periods
 
-### Error Handling
+### Data Processing
 
-The collector implements comprehensive error handling:
-- Connection failures are logged and retried
-- Invalid tickers are identified and marked
-- Database write failures trigger automatic rollbacks
-- Process crashes are contained and logged
+The script uses the enhanced DataFrame manipulation utilities for data preparation:
 
-### Performance Considerations
+```python
+import pandas as pd
+from tools.df_manipulation import ReadyDF  # This extends pd.DataFrame
 
-The script includes several performance optimizations:
-- Dynamic process pool sizing based on CPU cores
-- Configurable chunk sizes to balance memory usage
-- Efficient database connection pooling
-- Optimized data type handling for database inserts
+def process_financial_data(data):
+    df = pd.DataFrame(data)
+    
+    # Normalize column names and prepare for database insertion
+    df = pd.normalize(df)  # Can also use df.normalize()
+    df = pd.finalize_trackers(df)  # Can also use df.finalize_trackers()
+    
+    return df
+```
+
+This ensures that all data is properly formatted before database insertion, with:
+- Standardized column names
+- Correct data types
+- Proper handling of None values
+- Required fields validation (tracker and date)
 
 ## Verify Script (verify.py)
 
@@ -68,14 +76,6 @@ The verification process follows a two-step approach:
 3. Conducts secondary verification on failed trackers
 4. Updates tracker status in the database
 5. Generates verification logs for monitoring
-
-### Error Handling
-
-The verify script includes robust error handling:
-- Distinguishes between temporary failures and actual delistings
-- Manages database connection issues gracefully
-- Provides detailed logging of verification results
-- Maintains data integrity during updates
 
 ### Best Practices for Usage
 

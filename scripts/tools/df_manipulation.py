@@ -1,68 +1,69 @@
 """
 DataFrame Column Normalization Module
 
-This module provides functionality to normalize DataFrame column names in both pandas
-and polars DataFrames. It automatically adds a normalize() method to DataFrame 
-objects when imported, allowing for seamless integration with existing DataFrame 
-operations.
-
-The normalization process:
-- Converts all column names to lowercase
-- Replaces special characters with underscores
-- Maintains alphanumeric characters and underscores
-- Preserves the original data while only modifying column names
+This module provides functionality to normalize DataFrame column names and prepare data
+for database insertion. It works with both pandas and polars DataFrames, handling
+column name standardization and data type conversion appropriately.
 
 Example:
     >>> import pandas as pd
-    >>> # Create sample data inline
+    >>> # Create a DataFrame with messy column names
     >>> df = pd.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
-    >>> df = ReadyDF.normalize(df)
-    >>> list(df.columns)
-    ['column_name', 'another_col']
-
-    >>> import polars as pl
-    >>> df = pl.DataFrame({'Column Name!': [1, 2], 'Another@Col': [3, 4]})
-    >>> df = ReadyDF.normalize(df)
-    >>> df.columns
-    ['column_name', 'another_col']
+    >>> df = df.normalize()  # Standardize column names
+    >>> df = df.finalize_trackers()  # Prepare for database insertion
 """
 
 import re
 import logging
 import pandas as pd
 import polars as pl
-from typing import Union, Literal
+from typing import Union
 
-# Set up logging configuration
 logger = logging.getLogger(__name__)
 
 class ReadyDF:
     """
-    A utility class that extends DataFrame functionality with column normalization.
-
-    This class provides both static normalization methods and automatically adds
-    a normalize() method to DataFrame objects when imported. You can either use
-    the class method ReadyDF.normalize() which automatically detects the DataFrame
-    type, or use the .normalize() method directly on DataFrame objects.
-
-    Class Attributes:
-        NORMALIZE_PATTERN (re.Pattern): A compiled regular expression pattern that
-            matches any characters that aren't letters, numbers, or underscores.
+    A utility class that extends DataFrame functionality with column normalization
+    and finalization methods.
     """
 
-    # Modified pattern to handle consecutive special characters
+    # Pattern for normalizing column names - matches any non-alphanumeric characters
     NORMALIZE_PATTERN = re.compile(r'[^a-zA-Z0-9]+')
+
+    # Define the standard column order and types for the tracker fact table
+    TRACKER_COLUMNS = [
+        'tracker',              # Required string
+        'date',                # Required string
+        'open',                # Optional float
+        'high',               # Optional float
+        'low',                # Optional float
+        'close',              # Optional float
+        'volume',             # Optional float
+        'dividends',          # Optional float
+        'stock_splits',       # Optional float
+        'operating_margin',   # Optional float
+        'gross_margin',       # Optional float
+        'net_profit_margin',  # Optional float
+        'roa',               # Optional float
+        'roe',               # Optional float
+        'ebitda',            # Optional float
+        'quick_ratio',       # Optional float
+        'operating_cash_flow', # Optional float
+        'working_capital',    # Optional float
+        'p_e',               # Optional float
+        'p_b',               # Optional float
+        'p_s',               # Optional float
+        'dividend_yield',     # Optional float
+        'eps',               # Optional float
+        'debt_to_asset',     # Optional float
+        'debt_to_equity',    # Optional float
+        'interest_coverage_ratio'  # Optional float
+    ]
 
     @staticmethod
     def _normalize_pd(df: pd.DataFrame) -> pd.DataFrame:
         """
         Internal method to normalize pandas DataFrame column names.
-
-        Args:
-            df (pd.DataFrame): The pandas DataFrame to normalize
-
-        Returns:
-            pd.DataFrame: DataFrame with normalized column names
         """
         try:
             if df.empty:
@@ -81,12 +82,6 @@ class ReadyDF:
     def _normalize_pl(df: pl.DataFrame) -> pl.DataFrame:
         """
         Internal method to normalize polars DataFrame column names.
-
-        Args:
-            df (pl.DataFrame): The polars DataFrame to normalize
-
-        Returns:
-            pl.DataFrame: DataFrame with normalized column names
         """
         try:
             if df.is_empty():
@@ -103,26 +98,85 @@ class ReadyDF:
             raise
 
     @staticmethod
+    def _finalize_trackers_pd(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Internal method to finalize pandas DataFrame for database insertion.
+        Handles required fields (tracker, date) and optional fields appropriately.
+        """
+        try:
+            # First normalize column names
+            df = ReadyDF._normalize_pd(df)
+
+            # Create a DataFrame with the correct columns and None values
+            result_df = pd.DataFrame(columns=ReadyDF.TRACKER_COLUMNS)
+
+            # Copy existing data and enforce data types
+            for col in ReadyDF.TRACKER_COLUMNS:
+                if col in df.columns:
+                    # Handle required string columns
+                    if col in ['tracker', 'date']:
+                        result_df[col] = df[col].fillna('UNKNOWN' if col == 'tracker' else '1970-01-01')
+                        result_df[col] = result_df[col].astype(str)
+                    else:
+                        # Handle optional float columns
+                        result_df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            logger.info("Pandas DataFrame finalized successfully")
+            return result_df
+
+        except Exception as e:
+            logger.error(f"Error finalizing pandas DataFrame: {e}")
+            raise
+
+    @staticmethod
+    def _finalize_trackers_pl(df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Internal method to finalize polars DataFrame for database insertion.
+        Handles required fields (tracker, date) and optional fields appropriately.
+        """
+        try:
+            # First normalize column names
+            df = ReadyDF._normalize_pl(df)
+
+            # Create expressions for all columns
+            expressions = []
+            for col in ReadyDF.TRACKER_COLUMNS:
+                if col in df.columns:
+                    if col in ['tracker', 'date']:
+                        # Handle required string columns
+                        expr = (
+                            pl.col(col)
+                            .fill_null('UNKNOWN' if col == 'tracker' else '1970-01-01')
+                            .cast(pl.Utf8)
+                        )
+                    else:
+                        # Handle optional float columns
+                        expr = pl.col(col).cast(pl.Float64, strict=False)
+                else:
+                    # Add missing columns with appropriate types and None values
+                    expr = (
+                        pl.lit(None)
+                        .cast(pl.Utf8 if col in ['tracker', 'date'] else pl.Float64)
+                        .alias(col)
+                    )
+                expressions.append(expr)
+
+            # Apply all transformations and select columns in correct order
+            df = df.with_columns(expressions).select(ReadyDF.TRACKER_COLUMNS)
+
+            logger.info("Polars DataFrame finalized successfully")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error finalizing polars DataFrame: {e}")
+            raise
+
+    @staticmethod
     def normalize(df: Union[pd.DataFrame, pl.DataFrame]) -> Union[pd.DataFrame, pl.DataFrame]:
         """
         Normalize column names in either pandas or polars DataFrames.
-
-        This unified method automatically detects the DataFrame type and applies
-        the appropriate normalization. It converts all column names to lowercase
-        and replaces special characters with underscores.
-
-        Args:
-            df (Union[pd.DataFrame, pl.DataFrame]): The DataFrame to normalize.
-                Can be either a pandas or polars DataFrame.
-
-        Returns:
-            Union[pd.DataFrame, pl.DataFrame]: The DataFrame with normalized column
-                names. Returns the same type as the input DataFrame.
-
-        Raises:
-            TypeError: If the input is neither a pandas nor a polars DataFrame
-            ValueError: If the DataFrame is empty
-            Exception: If any error occurs during normalization
+        This standardizes column names by converting to lowercase and replacing
+        special characters with underscores.
         """
         if isinstance(df, pd.DataFrame):
             return ReadyDF._normalize_pd(df)
@@ -134,136 +188,59 @@ class ReadyDF:
     @staticmethod
     def finalize_trackers(df: Union[pd.DataFrame, pl.DataFrame]) -> Union[pd.DataFrame, pl.DataFrame]:
         """
-        Finalize the DataFrame for writing to the main database.
-        Normalizes column names, reorders columns, and sets correct data types.
-
-        Args:
-            df (Union[pd.DataFrame, pl.DataFrame]): Input DataFrame to process
-
-        Returns:
-            Union[pd.DataFrame, pl.DataFrame]: Processed DataFrame with correct column
-                order and data types
+        Finalize DataFrame for database insertion by normalizing column names,
+        reordering columns, and setting correct data types. Handles missing values
+        appropriately, with only tracker and date being required fields.
         """
-        # First normalize the DataFrame
-        df = ReadyDF.normalize(df)
+        if isinstance(df, pd.DataFrame):
+            return ReadyDF._finalize_trackers_pd(df)
+        elif isinstance(df, pl.DataFrame):
+            return ReadyDF._finalize_trackers_pl(df)
+        else:
+            raise TypeError("Input must be either a pandas or polars DataFrame")
 
-        # Define column order to match the fact table
-        columns_order = [
-            'tracker',
-            'date',
+# Add instance methods to DataFrame classes
+def normalize_pd(self):
+    """Instance method for pandas DataFrame normalization."""
+    return ReadyDF._normalize_pd(self)
 
-            # Historical Price Data
-            'open',
-            'high',
-            'low',
-            'close',
-            'volume',
-            'dividends',
-            'stock_splits',
+def finalize_trackers_pd(self):
+    """Instance method for pandas DataFrame finalization."""
+    return ReadyDF._finalize_trackers_pd(self)
 
-            # Profitability Ratios
-            'operating_margin',
-            'gross_margin',
-            'net_profit_margin',
-            'roa',
-            'roe',
-            'ebitda',
+def normalize_pl(self):
+    """Instance method for polars DataFrame normalization."""
+    return ReadyDF._normalize_pl(self)
 
-            # Liquidity Ratios
-            'current_ratio',
-            'quick_ratio',
-            'operating_cash_flow',
-            'working_capital',
+def finalize_trackers_pl(self):
+    """Instance method for polars DataFrame finalization."""
+    return ReadyDF._finalize_trackers_pl(self)
 
-            # Valuation Ratios
-            'p_e',
-            'p_b',
-            'p_s',
-            'dividend_yield',
-            'eps',
+# Add module-level functions to pandas and polars
+def pd_normalize(df: pd.DataFrame) -> pd.DataFrame:
+    """Module-level function for pandas DataFrame normalization."""
+    return ReadyDF._normalize_pd(df)
 
-            # Debt Ratios
-            'debt_to_asset',
-            'debt_to_equity',
-            'interest_coverage_ratio'
-        ]
+def pd_finalize_trackers(df: pd.DataFrame) -> pd.DataFrame:
+    """Module-level function for pandas DataFrame finalization."""
+    return ReadyDF._finalize_trackers_pd(df)
 
-        try:
-            if isinstance(df, pl.DataFrame):
-                # Define schema for Polars DataFrame
-                schema = {
-                    'tracker': pl.Utf8,
-                    'date': pl.Utf8,
-                    'open': pl.Float64,
-                    'high': pl.Float64,
-                    'low': pl.Float64,
-                    'close': pl.Float64,
-                    'volume': pl.Float64,
-                    'dividends': pl.Float64,
-                    'stock_splits': pl.Float64,
-                    'operating_margin': pl.Float64,
-                    'gross_margin': pl.Float64,
-                    'net_profit_margin': pl.Float64,
-                    'roa': pl.Float64,
-                    'roe': pl.Float64,
-                    'ebitda': pl.Float64,
-                    'current_ratio': pl.Float64,
-                    'quick_ratio': pl.Float64,
-                    'operating_cash_flow': pl.Float64,
-                    'working_capital': pl.Float64,
-                    'p_e': pl.Float64,
-                    'p_b': pl.Float64,
-                    'p_s': pl.Float64,
-                    'dividend_yield': pl.Float64,
-                    'eps': pl.Float64,
-                    'debt_to_asset': pl.Float64,
-                    'debt_to_equity': pl.Float64,
-                    'interest_coverage_ratio': pl.Float64
-                }
+def pl_normalize(df: pl.DataFrame) -> pl.DataFrame:
+    """Module-level function for polars DataFrame normalization."""
+    return ReadyDF._normalize_pl(df)
 
-                return df.select([pl.col(col).cast(schema[col]) for col in columns_order])
+def pl_finalize_trackers(df: pl.DataFrame) -> pl.DataFrame:
+    """Module-level function for polars DataFrame finalization."""
+    return ReadyDF._finalize_trackers_pl(df)
 
-            elif isinstance(df, pd.DataFrame):
-                # Define schema for pandas DataFrame
-                schema = {
-                    'tracker': 'string',
-                    'date': 'string',
-                    'open': 'float64',
-                    'high': 'float64',
-                    'low': 'float64',
-                    'close': 'float64',
-                    'volume': 'float64',
-                    'dividends': 'float64',
-                    'stock_splits': 'float64',
-                    'operating_margin': 'float64',
-                    'gross_margin': 'float64',
-                    'net_profit_margin': 'float64',
-                    'roa': 'float64',
-                    'roe': 'float64',
-                    'ebitda': 'float64',
-                    'current_ratio': 'float64',
-                    'quick_ratio': 'float64',
-                    'operating_cash_flow': 'float64',
-                    'working_capital': 'float64',
-                    'p_e': 'float64',
-                    'p_b': 'float64',
-                    'p_s': 'float64',
-                    'dividend_yield': 'float64',
-                    'eps': 'float64',
-                    'debt_to_asset': 'float64',
-                    'debt_to_equity': 'float64',
-                    'interest_coverage_ratio': 'float64'
-                }
+# Attach instance methods to DataFrame classes
+pd.DataFrame.normalize = normalize_pd
+pd.DataFrame.finalize_trackers = finalize_trackers_pd
+pl.DataFrame.normalize = normalize_pl
+pl.DataFrame.finalize_trackers = finalize_trackers_pl
 
-                return df[columns_order].astype(schema)
-
-            else:
-                raise TypeError("Unsupported DataFrame type")
-
-        except Exception as e:
-            logger.error(f"Error in finalizing trackers: {e}")
-            raise
-
-# Add the normalize methods to DataFrame classes when the module is imported
-pd.DataFrame.normalize = ReadyDF._normalize_pd
-pl.DataFrame.normalize = ReadyDF._normalize_pl
+# Attach module-level functions
+pd.normalize = pd_normalize
+pd.finalize_trackers = pd_finalize_trackers
+pl.normalize = pl_normalize
+pl.finalize_trackers = pl_finalize_trackers
