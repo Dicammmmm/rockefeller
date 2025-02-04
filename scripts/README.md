@@ -17,7 +17,8 @@ The collector script utilizes a multi-stage approach to data gathering:
    If the 5-year collection fails for certain trackers, the script automatically falls back to:
    - 1-year historical data collection
    - 5-day historical data collection
-   This tiered approach ensures we capture as much data as possible even for restricted or newly listed securities.
+   
+    This tiered approach ensures we capture as much data as possible even for restricted or newly listed securities.
 
 ### Process Flow
 
@@ -106,13 +107,5 @@ Both scripts rely heavily on the utility modules in the tools directory:
 - DatabaseConnect for database operations
 - ReadyDF for DataFrame manipulation
 - Standards for consistent table naming
-
-## Future Improvements
-
-Several enhancements are planned for these scripts:
-1. Implementation of retry mechanisms with exponential backoff
-2. Addition of real-time monitoring capabilities
-3. Enhanced parallel processing optimization
-4. Integration with external monitoring systems
 
 For detailed information about the utility modules used by these scripts, please refer to the README in the tools directory.

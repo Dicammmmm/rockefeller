@@ -144,12 +144,4 @@ Each module implements comprehensive error handling:
        raise
    ```
 
-## Future Improvements
-
-Several improvements are planned for these utilities:
-1. Enhanced connection pooling capabilities
-2. Additional DataFrame transformation options
-3. Extended table name management features
-4. Improved type hinting and validation
-
 For information about how these tools are used in practice, please refer to the README in the scripts directory.
