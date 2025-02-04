@@ -48,7 +48,7 @@ class ReadyDF:
         'roe',               # Optional float
         'ebitda',            # Optional float
         'quick_ratio',       # Optional float
-        'operating_cash_flow', # Optional float
+        'operating_cashflow', # Optional float
         'working_capital',    # Optional float
         'p_e',               # Optional float
         'p_b',               # Optional float
