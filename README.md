@@ -10,6 +10,7 @@ A high-performance ETL pipeline for financial data extraction, combining the pow
 - **Robust Error Handling**: Comprehensive logging and graceful failure recovery
 - **Automated Verification**: Built-in tools to verify tracker validity
 - **Column Normalization**: Automated cleanup of DataFrame columns across libraries
+- **Standardized Table Management**: Centralized table name management through standards module
 
 ## Technical Requirements
 
@@ -28,7 +29,7 @@ cd rockefeller
 2. Set up a virtual environment (recommended):
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -64,18 +65,23 @@ DB_SCHEMA_PUBLIC=
 ### Database Operations
 ```python
 from tools.db_connect import DatabaseConnect
+from tools.standards import DEFAULT_TABLES
 
 # Initialize connection
 db = DatabaseConnect()
+
+# Access standardized table names
+dim_trackers_table = DEFAULT_TABLES["DIM_TRACKERS"]
+fct_trackers_table = DEFAULT_TABLES["FCT_TRACKERS"]
 
 # Verify connection
 if db.test_connection():
     print("Successfully connected to database!")
 
-# Use the connection
+# Use the connection with standardized table names
 try:
     db.connect()
-    # Your database operations here
+    db.cursor.execute(f"SELECT COUNT(*) FROM {dim_trackers_table}")
 finally:
     db.disconnect()
 ```
@@ -109,7 +115,8 @@ rockefeller/
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── db_connect.py      # Database management
-│   │   └── df_manipulation.py # DataFrame utilities
+│   │   ├── df_manipulation.py # DataFrame utilities
+│   │   └── standards.py       # Table name standardization
 │   ├── collector.py           # Data collection
 │   └── verify.py              # Tracker verification
 ├── .env                       # Environment variables
@@ -127,6 +134,7 @@ Manages database connections with environment-specific configurations:
 - Secure credential management
 - Comprehensive logging
 - Schema-specific configurations
+- Integration with standardized table names
 
 ### ReadyDF
 Provides unified DataFrame processing across Pandas and Polars:
@@ -135,6 +143,14 @@ Provides unified DataFrame processing across Pandas and Polars:
 - Method injection for direct usage
 - Comprehensive error handling
 - Performance-optimized processing
+
+### Standards
+Centralizes database table name management:
+- Consistent table naming across the application
+- Function-based table name generation
+- Default table mapping through DEFAULT_TABLES dictionary
+- Type-safe table name access
+- Simplified table name maintenance
 
 ### Collector
 Handles data collection with:
@@ -147,11 +163,12 @@ Handles data collection with:
 ## Dependencies
 
 Core dependencies:
-- pandas
-- polars
-- psycopg2-binary
-- python-dotenv
-- yfinance
+- pandas>=2.0.0           # DataFrame manipulation
+- polars>=0.20.0         # High-performance DataFrame operations
+- numpy>=1.24.0          # Numerical computations and array operations
+- psycopg2-binary>=2.9.0 # PostgreSQL database adapter
+- python-dotenv>=1.0.0   # Environment variable management
+- yfinance>=0.2.0        # Yahoo Finance data retrieval
 
 ## Disclaimer
 
