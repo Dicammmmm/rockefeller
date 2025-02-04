@@ -60,51 +60,6 @@ DB_PASSWORD_PUBLIC=
 DB_SCHEMA_PUBLIC= 
 ```
 
-## Quick Start
-
-### Database Operations
-```python
-from tools.db_connect import DatabaseConnect
-from tools.standards import DEFAULT_TABLES
-
-# Initialize connection
-db = DatabaseConnect()
-
-# Access standardized table names
-dim_trackers_table = DEFAULT_TABLES["DIM_TRACKERS"]
-fct_trackers_table = DEFAULT_TABLES["FCT_TRACKERS"]
-
-# Verify connection
-if db.test_connection():
-    print("Successfully connected to database!")
-
-# Use the connection with standardized table names
-try:
-    db.connect()
-    db.cursor.execute(f"SELECT COUNT(*) FROM {dim_trackers_table}")
-finally:
-    db.disconnect()
-```
-
-### DataFrame Processing
-```python
-from tools.df_manipulation import ReadyDF
-import pandas as pd
-import polars as pl
-
-# Using with Pandas
-df_pd = pd.DataFrame({'Column Name!': [1, 2]})
-normalized_pd = ReadyDF.normalize(df_pd)
-
-# Using with Polars
-df_pl = pl.DataFrame({'Column Name!': [1, 2]})
-normalized_pl = ReadyDF.normalize(df_pl)
-
-# Direct method on DataFrame (after importing ReadyDF)
-df = pd.DataFrame({'Column Name!': [1, 2]})
-normalized = df.normalize()
-```
-
 ## Project Structure
 ```
 rockefeller/
