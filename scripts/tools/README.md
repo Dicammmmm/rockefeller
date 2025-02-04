@@ -43,15 +43,12 @@ The ReadyDF class provides a comprehensive system for DataFrame manipulation, su
    ```python
    # As instance methods
    df = df.normalize()
-   df = df.finalize_trackers()
    
    # As pandas module functions
    df = pd.normalize(df)
-   df = pd.finalize_trackers(df)
    
    # As polars module functions
    df = pl.normalize(df)
-   df = pl.finalize_trackers(df)
    ```
 
 2. Column Standardization
@@ -59,24 +56,14 @@ The ReadyDF class provides a comprehensive system for DataFrame manipulation, su
    # Converts 'Column Name!' to 'column_name'
    df = df.normalize()
    ```
-
-3. Data Finalization
-   ```python
-   # Prepares data for database insertion
-   df = df.finalize_trackers()
-   # Results in standardized columns with proper types:
-   # - Required fields (tracker, date) enforced
-   # - Optional fields allow None values
-   # - All columns properly ordered
    ```
 
 ### Best Practices
 
 When working with DataFrame manipulation:
 1. Always normalize column names before finalization
-2. Use finalize_trackers() before database insertion
-3. Remember that only 'tracker' and 'date' fields are required
-4. Handle None values appropriately in optional fields
+2. Remember that only 'tracker' and 'date' fields are required
+3. Handle None values appropriately in optional fields
 
 ## Standards Module (standards.py)
 
@@ -110,7 +97,6 @@ import pandas as pd
 # Read and prepare data
 df = pd.DataFrame(your_data)
 df = df.normalize()
-df = df.finalize_trackers()
 
 # Write to database
 db = DatabaseConnect()

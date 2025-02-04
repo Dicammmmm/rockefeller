@@ -41,7 +41,6 @@ def process_financial_data(data):
     
     # Normalize column names and prepare for database insertion
     df = pd.normalize(df)  # Can also use df.normalize()
-    df = pd.finalize_trackers(df)  # Can also use df.finalize_trackers()
     
     return df
 ```
