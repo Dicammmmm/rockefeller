@@ -176,7 +176,7 @@ This project is for educational and research purposes only. Please ensure compli
 
 ## Contributions
 
-This is a personal project and thus I will not be accepting any contributions. Thank you for understanding. :)
+This is a personal project, and thus I will not be accepting any contributions. Thank you for understanding. :)
 
 ## License
 
