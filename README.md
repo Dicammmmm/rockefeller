@@ -163,12 +163,12 @@ Handles data collection with:
 ## Dependencies
 
 Core dependencies:
-- pandas>=2.0.0           # DataFrame manipulation
-- polars>=0.20.0         # High-performance DataFrame operations
-- numpy>=1.24.0          # Numerical computations and array operations
-- psycopg2-binary>=2.9.0 # PostgreSQL database adapter
-- python-dotenv>=1.0.0   # Environment variable management
-- yfinance>=0.2.0        # Yahoo Finance data retrieval
+- pandas
+- polars
+- numpy
+- psycopg2-binary
+- python-dotenv
+- yfinance
 
 ## Disclaimer
 
