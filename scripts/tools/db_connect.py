@@ -3,6 +3,7 @@ import logging
 import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
+from standards import DEFAULT_TABLES
 
 
 def setup_logging() -> str:
@@ -113,21 +114,29 @@ class DatabaseConnect:
         The credentials are loaded from environment variables set up in the .env file.
         """
 
-        if self.env == "prod":
-            self.db_schema = os.getenv("DB_SCHEMA_PROD")
-            self.db_user = os.getenv("DB_USERNAME_PROD")
-            self.db_password = os.getenv("DB_PASSWORD_PROD")
+        match self.env:
+            case "prod":
+                self.db_schema = os.getenv("DB_SCHEMA_PROD")
+                self.db_user = os.getenv("DB_USERNAME_PROD")
+                self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        elif self.env == "dev":
-            self.db_schema = os.getenv("DB_SCHEMA_DEV")
-            self.db_user = os.getenv("DB_USERNAME_DEV")
-            self.db_password = os.getenv("DB_PASSWORD_DEV")
+            case "dev":
+                self.logger.info("Dev environment not supported at this moment, switching to prod")
+                self.db_schema = os.getenv("DB_SCHEMA_PROD")
+                self.db_user = os.getenv("DB_USERNAME_PROD")
+                self.db_password = os.getenv("DB_PASSWORD_PROD")
 
-        else:
-            raise ValueError("Invalid environment setting. Use 'prod' or 'dev'.")
+            case "user":
+                self.db_schema = os.getenv("DB_SCHEMA_PUBLIC")
+                self.db_user = os.getenv("DB_USERNAME_PUBLIC")
+                self.db_password = os.getenv("DB_PASSWORD_PUBLIC")
+
+            case _:
+                raise ValueError("Invalid environment setting. Use 'prod', 'dev' or 'user.")
 
         self.db_name = os.getenv("DB_NAME")
         self.db_host = os.getenv("DB_HOST")
+        self.DIM_TRACKERS = DEFAULT_TABLES['DIM_TRACKERS']
 
     def connect(self) -> bool:
         """
@@ -169,21 +178,35 @@ class DatabaseConnect:
         Close any active database connections and cursors.
 
         Safely closes both cursor and connection objects if they exist.
-        Connection closure is logged for debugging purposes.
+        Connection closure is logged for debugging purposes. Handles any
+        exceptions that might occur during closure.
 
         Note:
             This method should be called when database operations are complete
             to free up database resources.
         """
+        try:
+            if self.cursor:
+                try:
+                    self.cursor.close()
+                except Exception as e:
+                    self.logger.error(f"Error closing cursor: {str(e)}")
+                finally:
+                    self.cursor = None
 
-        if self.cursor:
-            self.cursor.close()
+            if self.conn:
+                try:
+                    self.conn.close()
+                    self.logger.debug("Database connection closed")
+                except Exception as e:
+                    self.logger.error(f"Error closing connection: {str(e)}")
+                finally:
+                    self.conn = None
 
-        if self.conn:
-            self.conn.close()
-            self.logger.debug("Database connection closed")
+        except Exception as e:
+            self.logger.error(f"Unexpected error during disconnect: {str(e)}")
 
-    def test_connection(self) -> bool:
+    def test_connection(self) -> bool | None:
         """
         Verify database connectivity by executing a test query.
 
@@ -202,7 +225,7 @@ class DatabaseConnect:
         try:
             self.connect()
             self.logger.info("Testing database connection...")
-            self.cursor.execute("SELECT COUNT(*) FROM dim_trackers")
+            self.cursor.execute(f"SELECT COUNT(*) FROM {self.DIM_TRACKERS}")
             count = self.cursor.fetchone()[0]
             self.logger.info(f"Successfully queried dim_trackers table.")
             return True

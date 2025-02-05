@@ -1,9 +1,6 @@
 import logging
 import pandas as pd
 import yfinance as yf
-from colorlog import exception
-from numpy.f2py.crackfortran import endifs
-from sqlparse.utils import offset
 from yfinance import Ticker
 from tools.db_connect import DatabaseConnect
 
@@ -42,7 +39,7 @@ def get_trackers() -> list:
 
 def verify_trackers(trackers: list) -> None:
     """
-    Checkes and verifies whether the tracker has been delisted or not.
+    Checks and verifies whether the tracker has been delisted or not.
     :param trackers: List of trackers from the database.
     :return: None
     """
