@@ -9,7 +9,7 @@ scopes = [
 creds = Credentials.from_service_account_file("Credentials.json", scopes=scopes)
 client = gspread.authorize(creds)
 
-sheet_id = "1MDCZ2Wb_Sw7J6ininIWiJ_6YTvZxXgBRypN4dDZ68qI"
+sheet_id = os.getenv("SHEET_ID"]
 sheet = client.open_by_key(sheet_id)
 
 def write_to_google_sheet(df, spreadsheet_name, sheet_name="Finance Statements"):
