@@ -3,7 +3,7 @@ import logging
 import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
-from standards import DEFAULT_TABLES
+from .standards import DEFAULT_TABLES
 
 
 def setup_logging() -> str:

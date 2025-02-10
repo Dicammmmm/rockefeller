@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 from yfinance import Ticker
 from tools.db_connect import DatabaseConnect
+from tools.standards import DEFAULT_TABLES
 
 # Setup and test connection to the database
 db = DatabaseConnect()
@@ -13,8 +14,9 @@ if db.test_connection():
 else:
     logger.error("Database connection failed")
 
+DIM_TRACKERS = DEFAULT_TABLES["DIM_TRACKERS"]
 
-def get_trackers() -> list:
+def get_trackers() -> list|None:
     """
     Fetches a list of trackers from the database.
     :return: Returns a list of trackers.
@@ -23,7 +25,7 @@ def get_trackers() -> list:
 
     try:
          db.connect()
-         db.cursor.execute("SELECT ARRAY_AGG(tracker) FROM dim_trackers")
+         db.cursor.execute(f"SELECT ARRAY_AGG(tracker) FROM {DIM_TRACKERS}")
          trackers = db.cursor.fetchone()[0]
          logger.info(f"Successfully fetched {len(trackers)} trackers from the database")
 
@@ -51,14 +53,14 @@ def verify_trackers(trackers: list) -> None:
         for tracker in trackers:
             try:
                 ticker: Ticker = yf.Ticker(tracker)
-                history: pd.DataFrame = ticker.history(period="1y")
+                history: pd.DataFrame = ticker.history(period="1d")
 
                 if not history.empty:
                     logger.info(f"Ticker {tracker} is valid.")
-                    db.cursor.execute("UPDATE dim_trackers SET delisted = FALSE WHERE tracker = %s", (tracker,))
+                    db.cursor.execute(f"UPDATE {DIM_TRACKERS} SET delisted = FALSE WHERE tracker = %s", (tracker,))
 
             except Exception as e:
-                if "Period '1y' is invalid" in str(e):
+                if "Period '1d' is invalid" in str(e):
                     logger.info(f"tracker {tracker} needs recheck with shorter period")
                     recheck_trackers.append(tracker)
 
@@ -74,15 +76,15 @@ def verify_trackers(trackers: list) -> None:
 
                 if not history.empty:
                     logger.info(f"Ticker {tracker} is valid (after recheck).")
-                    db.cursor.execute("UPDATE dim_trackers SET delisted = FALSE WHERE tracker = %s", (tracker,))
+                    db.cursor.execute(f"UPDATE {DIM_TRACKERS} SET delisted = FALSE WHERE tracker = %s", (tracker,))
 
                 else:
                     logger.warning(f"Ticker {tracker} is invalid (after recheck).")
-                    db.cursor.execute("UPDATE dim_trackers SET delisted = TRUE WHERE tracker = %s", (tracker,))
+                    db.cursor.execute(f"UPDATE {DIM_TRACKERS} SET delisted = TRUE WHERE tracker = %s", (tracker,))
 
             except Exception as e:
                 logger.warning(f"Ticker {tracker} failed recheck: {str(e)}")
-                db.cursor.execute("UPDATE dim_trackers SET delisted = TRUE WHERE tracker = %s", (tracker,))
+                db.cursor.execute(f"UPDATE {DIM_TRACKERS} SET delisted = TRUE WHERE tracker = %s", (tracker,))
 
     except Exception as e:
         logger.error(f"Error verifying trackers: {str(e)}")
